@@ -12,8 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$installerProjectDir = Join-Path (Split-Path -Parent $repoRoot) "AD Guardian Installer"
-$installerReleaseDir = Join-Path $installerProjectDir "Release"
+$installerReleaseDir = Join-Path $repoRoot "artifacts\distributions\installer\Release"
 $installerPath = Join-Path $installerReleaseDir "AD Guardian Installer.exe"
 
 if (-not (Test-Path $installerPath)) {

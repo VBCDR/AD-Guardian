@@ -194,8 +194,6 @@ PublishScripts/
 
 # Installer outputs
 AD Guardian Installer.exe
-setup.exe
-installer/Release/
 
 # NuGet Packages
 *.nupkg

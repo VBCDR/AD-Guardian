@@ -18,13 +18,13 @@ if (-not $Portable -and -not $Installer) {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "Domain Guardian.csproj"
 $assemblyInfoPath = Join-Path $repoRoot "AssemblyInfo.cs"
-$installerProjectDir = Join-Path (Split-Path -Parent $repoRoot) "AD Guardian Installer"
+$installerProjectDir = Join-Path $repoRoot "installer"
 $installerScriptPath = Join-Path $installerProjectDir "AD Guardian Installer.iss"
 
 $distRoot = Join-Path $repoRoot "artifacts\distributions"
 $portableRoot = Join-Path $distRoot ("portable\" + $RuntimeIdentifier)
 $portableAppDir = Join-Path $portableRoot "app"
-$installerOutputDir = Join-Path $installerProjectDir "Release"
+$installerOutputDir = Join-Path $distRoot "installer\Release"
 
 function Reset-Directory([string]$Path) {
     if (Test-Path $Path) {
@@ -111,8 +111,4 @@ if ($Installer) {
         throw "Installer build failed with exit code $compilerExitCode."
     }
 
-    $primaryInstaller = Join-Path $installerOutputDir "AD Guardian Installer.exe"
-    if (Test-Path $primaryInstaller) {
-        Copy-Item -Path $primaryInstaller -Destination (Join-Path $installerOutputDir "setup.exe") -Force
-    }
 }
