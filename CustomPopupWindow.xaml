@@ -1,0 +1,41 @@
+<Window x:Class="AdHealthMonitor.CustomPopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Scheduled Task Completed"
+        Width="540"
+        Height="300"
+        WindowStartupLocation="CenterScreen"
+        Background="#EEF3F8"
+        Loaded="Window_Loaded">
+    <Grid x:Name="RootGrid" Margin="18">
+        <Border Background="White" CornerRadius="14" Padding="22" BorderBrush="#D7E2EC" BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock x:Name="HeaderTextBlock"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="#17324D"
+                           Margin="0,0,0,10"/>
+
+                <TextBlock x:Name="MessageTextBlock"
+                           Grid.Row="1"
+                           TextWrapping="Wrap"
+                           FontSize="14"
+                           Foreground="#4A5B6C"
+                           Margin="0,0,0,18"/>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="View Results" Margin="0,0,10,0" Padding="16,9" Background="#007ACC" Foreground="White" BorderThickness="0" Click="ViewResultsButton_Click"/>
+                    <Button Content="View Log" Margin="0,0,10,0" Padding="16,9" Background="#1F7DBA" Foreground="White" BorderThickness="0" Click="ViewLogButton_Click"/>
+                    <Button Content="About" Margin="0,0,10,0" Padding="16,9" Background="#607D8B" Foreground="White" BorderThickness="0" Click="AboutButton_Click"/>
+                    <Button Content="Close" Padding="16,9" Background="#98A6B5" Foreground="White" BorderThickness="0" Click="CloseButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

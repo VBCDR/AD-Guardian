@@ -3,23 +3,20 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows10.0.17763.0</TargetFramework>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <ImplicitUsings>false</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
-    <UseWindowsForms>True</UseWindowsForms>
-    <PackageIcon>AD Guardian logo (2).jpg</PackageIcon>
+    <ApplicationIcon>AD-Guardian-logo-_2_.ico</ApplicationIcon>
+    <PublishDir>artifacts/publish/$(Configuration)/$(TargetFramework)/</PublishDir>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\Documents\AD Guardian logo (2).jpg">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Extended.Wpf.Toolkit" Version="4.7.25103.5738" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.10" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="TaskScheduler" Version="2.12.0" />
     <PackageReference Include="Xceed.Products.Wpf.DataGrid.Base" Version="7.3.25103.5756" />
     <PackageReference Include="Xceed.Products.Wpf.DataGrid.Full" Version="7.3.25103.5756" />
@@ -28,5 +25,7 @@
     <PackageReference Include="Xceed.Products.Wpf.Toolkit.Full" Version="4.7.25103.5738" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="AD-Guardian-logo-_2_.ico"/>
+  </ItemGroup>
 </Project>
-

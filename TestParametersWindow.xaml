@@ -2,20 +2,57 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Test Parameters &amp; Email Settings"
-        Height="320"
-        Width="420"
+        Height="520"
+        Width="500"
         WindowStartupLocation="CenterOwner"
-        Background="#F0F0F0">
+        Background="#EEF3F8">
 
     <Window.Resources>
-        <!-- Style for Top-Level Buttons -->
-        <!-- Merged Rounded Button Style with Hover & Click Effects -->
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#D7E2EC"/>
+        <SolidColorBrush x:Key="HeadingBrush" Color="#17324D"/>
+        <SolidColorBrush x:Key="BodyBrush" Color="#5D6F82"/>
+        <Style x:Key="SettingsCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal">
+                            <Border x:Name="BoxBorder"
+                                    Width="18" Height="18"
+                                    CornerRadius="4"
+                                    BorderBrush="#C7D5E2"
+                                    BorderThickness="1"
+                                    Background="White"
+                                    VerticalAlignment="Center">
+                                <Path x:Name="CheckMark"
+                                       Data="M0,4 L3,7 L9.5,0"
+                                       Stroke="#1A73E8"
+                                       StrokeThickness="2.5"
+                                       StrokeLineJoin="Round"
+                                       StrokeEndLineCap="Round"
+                                       Opacity="0"
+                                       Stretch="None"/>
+                            </Border>
+                            <ContentPresenter Margin="10,0,0,0"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CheckMark" Property="Opacity" Value="1"/>
+                                <Setter TargetName="BoxBorder" Property="BorderBrush" Value="#1A73E8"/>
+                                <Setter TargetName="BoxBorder" Property="Background" Value="#E8F0FE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="RoundedButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="#007ACC"/>
-            <!-- Default color -->
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Padding" Value="12"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="14,10"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
@@ -24,28 +61,21 @@
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
                 </Setter.Value>
             </Setter>
-
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Border"
                    Background="{TemplateBinding Background}"
-                   CornerRadius="8"
-                   Padding="10">
+                   CornerRadius="10"
+                   Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-
                         <ControlTemplate.Triggers>
-                            <!-- Hover Effect -->
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="#005A9E"/>
-                                <!-- Darker color -->
+                                <Setter TargetName="Border" Property="Opacity" Value="0.92"/>
                             </Trigger>
-
-                            <!-- Click Effect -->
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="#003F73"/>
-                                <!-- Even darker -->
+                                <Setter TargetName="Border" Property="Opacity" Value="0.84"/>
                                 <Setter Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
@@ -57,10 +87,8 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
         <Style x:Key="RoundedButtonStyleCancel" TargetType="Button">
             <Setter Property="Background" Value="#007ACC"/>
-            <!-- Default color -->
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Padding" Value="12"/>
@@ -72,7 +100,6 @@
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
                 </Setter.Value>
             </Setter>
-
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -82,18 +109,12 @@
            Padding="10">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-
                         <ControlTemplate.Triggers>
-                            <!-- Hover Effect -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Border" Property="Background" Value="#adadad"/>
-                                <!-- Darker color -->
                             </Trigger>
-
-                            <!-- Click Effect -->
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Border" Property="Background" Value="#adadad"/>
-                                <!-- Even darker -->
                                 <Setter Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="0.95" ScaleY="0.95"/>
@@ -107,57 +128,111 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
-        <!-- White Panel for content -->
-        <Border Background="White" Padding="15" Margin="10" CornerRadius="5">
-            <StackPanel>
-                <!-- Title -->
-                <TextBlock Text="Test Parameters &amp; Email Settings"
-                           FontSize="20"
-                           FontWeight="Bold"
-                           Foreground="#007ACC"
-                           Margin="0,0,0,10"/>
-
-                <!-- Domain Controllers -->
-                <StackPanel Orientation="Vertical" Margin="0,0,0,10">
-                    <TextBlock Text="Domain Controllers (comma-separated):" 
+    <Grid Margin="12">
+        <Border Background="White" Padding="18" CornerRadius="12" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="Test Parameters &amp; Email Settings"
+                               FontSize="22"
                                FontWeight="Bold"
-                               FontSize="14" 
-                               Foreground="#555"/>
-                    <TextBox x:Name="dcTextBox" 
-                             Margin="0,5,0,0" 
-                             FontSize="14"/>
-                </StackPanel>
+                               Foreground="#007ACC"
+                               Margin="0,0,0,6"/>
+                    <TextBlock Text="Update your default domain controllers and notification target used across manual and scheduled runs."
+                               Foreground="{StaticResource BodyBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,14"/>
 
-                <!-- Email -->
-                <StackPanel Orientation="Vertical" Margin="0,0,0,10">
-                    <TextBlock Text="Recipient Email:" 
-                               FontWeight="Bold" 
-                               FontSize="14" 
-                               Foreground="#555"/>
-                    <TextBox x:Name="emailTextBox" 
-                             Margin="0,5,0,0" 
-                             FontSize="14"/>
-                </StackPanel>
+                    <StackPanel Orientation="Vertical" Margin="0,0,0,10">
+                        <TextBlock Text="Domain Controllers (comma-separated):" 
+                                   FontWeight="Bold"
+                                   FontSize="14" 
+                                   Foreground="{StaticResource HeadingBrush}"/>
+                        <TextBox x:Name="dcTextBox" 
+                                 Margin="0,5,0,0"
+                                 Padding="10,8"
+                                 BorderBrush="#C7D5E2"
+                                 BorderThickness="1"
+                                 Background="White"
+                                 FontSize="14"/>
+                    </StackPanel>
 
-                <!-- Buttons -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                    <!-- 'Save' in the same style as 'Run' button from main window (blue) -->
-                    <Button Content="Save"
-                            Style="{StaticResource RoundedButtonStyle}"
-                            Background="#007ACC"
-                            Foreground="White"
-                            Width="80"
-                            Margin="0,0,10,0"
-                            Click="SaveButton_Click"/>
-                    <!-- 'Cancel' styled similarly to 'Stop' or 'Export' from main window (gray) -->
-                    <Button Content="Cancel"
-                            Style="{StaticResource RoundedButtonStyleCancel}"
-                            Background="#E0E0E0"
-                            Width="80"
-                            Click="CancelButton_Click"/>
+                    <StackPanel Orientation="Vertical" Margin="0,0,0,10">
+                        <TextBlock Text="Recipient Email:" 
+                                   FontWeight="Bold" 
+                                   FontSize="14" 
+                                   Foreground="{StaticResource HeadingBrush}"/>
+                        <TextBox x:Name="emailTextBox" 
+                                 Margin="0,5,0,0"
+                                 Padding="10,8"
+                                 BorderBrush="#C7D5E2"
+                                 BorderThickness="1"
+                                 Background="White"
+                                 FontSize="14"/>
+                    </StackPanel>
+
+                    <Border Background="#F0F6FF"
+                            BorderBrush="{StaticResource PanelBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12"
+                            Margin="0,4,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Optional Tests"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource HeadingBrush}"
+                                       Margin="0,0,0,8"/>
+                            <CheckBox x:Name="chkDnsCheck" Style="{StaticResource SettingsCheckBoxStyle}" Content="DNS resolution check between DCs" Margin="0,0,0,4" IsChecked="True"/>
+                            <CheckBox x:Name="chkReplication" Style="{StaticResource SettingsCheckBoxStyle}" Content="AD replication status (repadmin)" Margin="0,0,0,4" IsChecked="True"/>
+                            <CheckBox x:Name="chkTimeSkew" Style="{StaticResource SettingsCheckBoxStyle}" Content="Time skew sync (w32tm /monitor)" Margin="0,0,0,4" IsChecked="True"/>
+                            <CheckBox x:Name="chkLdapBind" Style="{StaticResource SettingsCheckBoxStyle}" Content="LDAP bind / anonymous query test" Margin="0,0,0,4" IsChecked="True"/>
+                            <CheckBox x:Name="chkCertDhcp" Style="{StaticResource SettingsCheckBoxStyle}" Content="Certificate Services &amp; DHCP health checks" Margin="0,0,0,4" IsChecked="True"/>
+                            <CheckBox x:Name="chkSmbLdapSigning" Style="{StaticResource SettingsCheckBoxStyle}" Content="SMB signing / LDAP signing enforcement" Margin="0,0,0,4" IsChecked="True"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#F7F9FB"
+                            BorderBrush="{StaticResource PanelBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12"
+                            Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Email Test"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource HeadingBrush}"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="Send a test email to verify your SMTP configuration."
+                                       Foreground="{StaticResource BodyBrush}"
+                                       Margin="0,0,0,8"
+                                       TextWrapping="Wrap"/>
+                            <Button x:Name="TestEmailButton"
+                                    Content="Send Test Email"
+                                    Style="{StaticResource RoundedButtonStyle}"
+                                    Background="#2E7D32"
+                                    Width="140"
+                                    Height="36"
+                                    Click="TestEmailButton_Click"/>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                        <Button Content="Save"
+                                Style="{StaticResource RoundedButtonStyle}"
+                                Background="#007ACC"
+                                Foreground="White"
+                                Width="90"
+                                Margin="0,0,10,0"
+                                Click="SaveButton_Click"/>
+                        <Button Content="Cancel"
+                                Style="{StaticResource RoundedButtonStyleCancel}"
+                                Background="#98A6B5"
+                                Width="90"
+                                Click="CancelButton_Click"/>
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
+            </ScrollViewer>
         </Border>
     </Grid>
 </Window>

@@ -1,0 +1,59 @@
+<Window x:Class="Domain_Guardian.UpdatePromptWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Update Available"
+        Width="420"
+        Height="220"
+        WindowStartupLocation="CenterOwner"
+        Background="#F5F7FA"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        AllowsTransparency="True">
+    <Border Background="#F5F7FA" CornerRadius="14" BorderBrush="#D7E2EC" BorderThickness="1" Padding="24">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <Border Background="#E8F5E9" CornerRadius="20" Width="40" Height="40" Margin="0,0,14,0">
+                    <TextBlock Text="&#xE8F5;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                               Foreground="#2E7D32" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="TitleText" Text="Update Available"
+                               FontSize="18" FontWeight="Bold" Foreground="#17324D"/>
+                    <TextBlock x:Name="VersionInfoText" Text=""
+                               FontSize="13" Foreground="#7A8B9F" Margin="0,2,0,0"/>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Grid.Row="1" x:Name="MessageText"
+                       TextWrapping="Wrap" FontSize="14" Foreground="#4A5B6C"
+                       Margin="0,0,0,18"/>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="UpdateButton"
+                        Content="Update Now"
+                        Padding="16,9"
+                        Background="#2E7D32"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        FontWeight="SemiBold"
+                        Margin="0,0,10,0"
+                        Click="UpdateButton_Click"/>
+                <Button Content="Later"
+                        Padding="16,9"
+                        Background="#E0E6ED"
+                        Foreground="#17324D"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="LaterButton_Click"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
