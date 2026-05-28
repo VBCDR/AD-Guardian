@@ -192,6 +192,11 @@ publish/
 # in these scripts will be unencrypted
 PublishScripts/
 
+# Installer outputs
+AD Guardian Installer.exe
+setup.exe
+installer/Release/
+
 # NuGet Packages
 *.nupkg
 # NuGet Symbol Packages
