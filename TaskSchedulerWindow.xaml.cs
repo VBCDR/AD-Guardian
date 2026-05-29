@@ -46,7 +46,7 @@ public partial class TaskSchedulerWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Error saving tasks: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Error", "Error saving tasks: " + ex.Message, isError: true);
         }
     }
 
@@ -59,7 +59,7 @@ public partial class TaskSchedulerWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Error loading tasks: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Error", "Error loading tasks: " + ex.Message, isError: true);
         }
     }
 

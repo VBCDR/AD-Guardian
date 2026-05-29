@@ -819,16 +819,16 @@
 
                         <ToggleButton x:Name="MonitoringToggle" Click="GroupToggle_Click" Tag="MonitoringPanel" Style="{StaticResource SidebarSectionButtonStyle}" Margin="0,0,0,2" IsChecked="True"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0"/><TextBlock x:Name="MonitoringNavLabel" Text="MONITORING"/><TextBlock x:Name="MonitoringArrow" Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="10" Margin="6,2,0,0"/></StackPanel></ToggleButton>
                         <StackPanel x:Name="MonitoringPanel" Margin="12,0,0,6" ClipToBounds="True">
-                            <Button x:Name="HealthNavButton" Tag="1" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="&#x276F;" Margin="0,0,10,0" FontSize="10"/><TextBlock x:Name="HealthNavLabel" Text="Health"/></StackPanel></Button>
-                            <Button x:Name="FindingsNavButton" Tag="2" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="&#x276F;" Margin="0,0,10,0" FontSize="10"/><TextBlock x:Name="FindingsNavLabel" Text="Findings"/></StackPanel></Button>
-                            <Button x:Name="SecurityNavButton" Tag="6" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="&#x276F;" Margin="0,0,10,0" FontSize="10"/><TextBlock x:Name="SecurityNavLabel" Text="Security"/></StackPanel></Button>
+                            <Button x:Name="HealthNavButton" Tag="1" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="•" Margin="0,0,10,0" FontSize="12"/><TextBlock x:Name="HealthNavLabel" Text="Health"/></StackPanel></Button>
+                            <Button x:Name="FindingsNavButton" Tag="2" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="•" Margin="0,0,10,0" FontSize="12"/><TextBlock x:Name="FindingsNavLabel" Text="Findings"/></StackPanel></Button>
+                            <Button x:Name="SecurityNavButton" Tag="6" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="•" Margin="0,0,10,0" FontSize="12"/><TextBlock x:Name="SecurityNavLabel" Text="Security"/></StackPanel></Button>
                         </StackPanel>
 
                         <ToggleButton x:Name="DataToggle" Click="GroupToggle_Click" Tag="DataPanel" Style="{StaticResource SidebarSectionButtonStyle}" Margin="0,0,0,2" IsChecked="True"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE968;" FontFamily="Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0"/><TextBlock x:Name="DataNavLabel" Text="DATA"/><TextBlock x:Name="DataArrow" Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="10" Margin="6,2,0,0"/></StackPanel></ToggleButton>
                         <StackPanel x:Name="DataPanel" Margin="12,0,0,6" ClipToBounds="True">
-                            <Button x:Name="InfrastructureNavButton" Tag="3" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="&#x276F;" Margin="0,0,10,0" FontSize="10"/><TextBlock x:Name="InfrastructureNavLabel" Text="Infrastructure"/></StackPanel></Button>
-                            <Button x:Name="HistoryNavButton" Tag="4" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="&#x276F;" Margin="0,0,10,0" FontSize="10"/><TextBlock x:Name="HistoryNavLabel" Text="History"/></StackPanel></Button>
-                            <Button x:Name="LogsNavButton" Tag="5" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="&#x276F;" Margin="0,0,10,0" FontSize="10"/><TextBlock x:Name="LogsNavLabel" Text="Logs"/></StackPanel></Button>
+                            <Button x:Name="InfrastructureNavButton" Tag="3" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="•" Margin="0,0,10,0" FontSize="12"/><TextBlock x:Name="InfrastructureNavLabel" Text="Infrastructure"/></StackPanel></Button>
+                            <Button x:Name="HistoryNavButton" Tag="4" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="•" Margin="0,0,10,0" FontSize="12"/><TextBlock x:Name="HistoryNavLabel" Text="History"/></StackPanel></Button>
+                            <Button x:Name="LogsNavButton" Tag="5" Click="NavSectionButton_Click" Style="{StaticResource SidebarNavButtonStyle}" Margin="0,0,0,4"><StackPanel Orientation="Horizontal"><TextBlock Text="•" Margin="0,0,10,0" FontSize="12"/><TextBlock x:Name="LogsNavLabel" Text="Logs"/></StackPanel></Button>
                         </StackPanel>
 
                         <Rectangle Height="1" Fill="#2A3644" Margin="8,4,8,8"/>
@@ -1243,6 +1243,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
@@ -1302,7 +1303,7 @@
                                     </Grid>
                                     </Border>
 
-                         <Grid Grid.Row="1" Margin="0,0,0,10">
+                        <Grid Grid.Row="1" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
@@ -1317,26 +1318,39 @@
                             </Border>
                             <Border Grid.Column="1" Background="White" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="6,0">
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Critical" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                    <TextBlock Text="Critical Findings" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
                                     <TextBlock x:Name="CriticalFindingsText" Text="0" FontSize="22" FontWeight="Bold" Foreground="#D32F2F" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="2" Background="White" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="6,0">
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Passing" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                    <TextBlock Text="Passing Tests" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
                                     <TextBlock x:Name="PassingTestsText" Text="0" FontSize="22" FontWeight="Bold" Foreground="#2E7D32" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="3" Background="White" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="6,0,0,0">
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="DCs" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                    <TextBlock Text="Configured DCs" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
                                     <TextBlock x:Name="DomainControllerCountText" Text="0" FontSize="22" FontWeight="Bold" Foreground="{StaticResource HeadingBrush}" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Border>
                         </Grid>
 
+                        <Border Grid.Row="2"
+                                Background="{StaticResource SoftFillBrush}"
+                                BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <TextBlock x:Name="HealthSummaryText"
+                                       Text="No run data loaded yet."
+                                       Foreground="{StaticResource BodyBrush}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+
                         <Border x:Name="DetailsPanel"
-                                Grid.Row="2"
+                                Grid.Row="3"
                                 Background="#F7FAFD"
                                 BorderBrush="#D7E2EC"
                                 BorderThickness="1"
@@ -1356,7 +1370,7 @@
                                      TextWrapping="Wrap"/>
                         </Border>
 
-                        <Grid Grid.Row="3" Margin="0,0,0,0">
+                        <Grid Grid.Row="4" Margin="0,0,0,0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="Auto"/>
@@ -1496,10 +1510,44 @@
                     <Grid Margin="2">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0"
+                                Background="White"
+                                BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="14"
+                                Padding="16"
+                                Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Findings"
+                                               FontSize="20"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource HeadingBrush}"/>
+                                    <TextBlock Text="Actionable issues and remediation guidance"
+                                               Margin="0,4,0,0"
+                                               Foreground="{StaticResource BodyBrush}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Content="Back to Health"
+                                        Style="{StaticResource RoundedButtonStyle}"
+                                        Background="#607D8B"
+                                        Width="126"
+                                        Height="38"
+                                        Margin="16,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Click="BackToHealth_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="1"
                                 Background="{StaticResource SoftFillBrush}"
                                 BorderBrush="{StaticResource PanelBorderBrush}"
                                 BorderThickness="1"
@@ -1507,28 +1555,33 @@
                                 Padding="14"
                                 Margin="0,0,0,12">
                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="320"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0">
+                                <StackPanel Grid.Row="0" Grid.Column="0">
                                     <TextBlock Text="Search findings" FontWeight="Bold" Foreground="{StaticResource HeadingBrush}" Margin="0,0,0,6"/>
                                     <TextBox x:Name="FindingsSearchBox" Style="{StaticResource ModernTextBoxStyle}" TextChanged="FindingsSearchBox_TextChanged"/>
                                 </StackPanel>
 
-                                <TextBlock Grid.Column="1"
+                                <TextBlock Grid.Row="0" Grid.Column="1"
                                            Text="Actionable findings combine test failures, AD inventory drift, telemetry gaps, and privilege issues into one queue."
-                                           Margin="18,26,20,0"
+                                           Margin="18,6,20,0"
                                            Foreground="{StaticResource BodyBrush}"
                                            VerticalAlignment="Top"
                                            TextWrapping="Wrap"/>
 
-                                <Border Grid.Column="2"
-                                        Margin="8,20,8,0"
+                                <Border Grid.Row="1" Grid.Column="3"
+                                        Margin="8,14,8,0"
                                         Padding="12,8"
                                         Background="White"
                                         BorderBrush="{StaticResource PanelBorderBrush}"
@@ -1541,8 +1594,8 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Grid.Column="3"
-                                        Margin="0,20,8,0"
+                                <Border Grid.Row="1" Grid.Column="4"
+                                        Margin="0,14,8,0"
                                         Padding="12,8"
                                         Background="#FFF4E5"
                                         BorderBrush="#F2D3A0"
@@ -1555,8 +1608,8 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Grid.Column="4"
-                                        Margin="0,20,0,0"
+                                <Border Grid.Row="1" Grid.Column="5"
+                                        Margin="0,14,0,0"
                                         Padding="12,8"
                                         Background="#FFEBEE"
                                         BorderBrush="#E8B8C1"
@@ -1571,7 +1624,13 @@
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="1"
+                        <Grid Grid.Row="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0"
                                 Background="White"
                                 BorderBrush="{StaticResource PanelBorderBrush}"
                                 BorderThickness="1"
@@ -1587,6 +1646,7 @@
                                       SelectionMode="Single"
                                       SelectionUnit="FullRow"
                                       AlternationCount="2"
+                                      SelectionChanged="dgFindings_SelectionChanged"
                                       VirtualizingPanel.VirtualizationMode="Recycling"
                                       VirtualizingPanel.ScrollUnit="Item">
                                 <DataGrid.Resources>
@@ -1683,6 +1743,42 @@
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Border>
+                            <Border Grid.Row="1"
+                                    Background="#F7FAFD"
+                                    BorderBrush="{StaticResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="12"
+                                    Padding="14"
+                                    Margin="0,12,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Finding details"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource HeadingBrush}"/>
+                                        <TextBlock x:Name="FindingDetailsText"
+                                                   Text="Select a finding to see the full explanation, evidence, and next action."
+                                                   Margin="0,8,0,0"
+                                                   Foreground="{StaticResource BodyBrush}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <Button x:Name="OpenFindingLogButton"
+                                            Grid.Column="1"
+                                            Content="Open Related Log"
+                                            Style="{StaticResource RoundedButtonStyle}"
+                                            Background="#1A73E8"
+                                            Width="138"
+                                            Height="38"
+                                            Margin="12,0,0,0"
+                                            VerticalAlignment="Top"
+                                            Click="OpenFindingLog_Click"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
                     </Grid>
                 </TabItem>
 
@@ -1957,11 +2053,12 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0"
-                                Background="{StaticResource SoftFillBrush}"
+                                Background="White"
                                 BorderBrush="{StaticResource PanelBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="14"
@@ -1971,73 +2068,123 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="220"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
+                                    <TextBlock Text="Logs"
+                                               FontSize="20"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource HeadingBrush}"/>
+                                    <TextBlock Text="Diagnostic log output"
+                                               Margin="0,4,0,0"
+                                               Foreground="{StaticResource BodyBrush}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Content="Back to Health"
+                                        Style="{StaticResource RoundedButtonStyle}"
+                                        Background="#607D8B"
+                                        Width="126"
+                                        Height="38"
+                                        Margin="16,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Click="BackToHealth_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="1"
+                                Background="{StaticResource SoftFillBrush}"
+                                BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="14"
+                                Padding="16"
+                                Margin="0,0,0,12"
+                                VerticalAlignment="Top">
+                            <Grid VerticalAlignment="Top">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Row="0" Grid.Column="0">
                                     <TextBlock Text="Logs Workspace"
                                                FontSize="16"
                                                FontWeight="SemiBold"
                                                Foreground="{StaticResource HeadingBrush}"/>
                                     <TextBlock x:Name="LogsSummaryText"
-                                               Text="Browse failures, jump to exact evidence, and inspect the raw combined log."
+                                               Text="Open and inspect the raw combined log directly. This view now prioritises the full evidence rather than parsed subsections."
                                                Margin="0,4,0,0"
                                                Foreground="{StaticResource BodyBrush}"
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <ComboBox x:Name="LogsDcFilter"
-                                          Grid.Column="1"
-                                          Width="160"
-                                          Height="36"
-                                          Margin="16,0,8,0"
-                                          VerticalAlignment="Center"
-                                          SelectionChanged="LogsFilter_Changed"/>
-                                <ComboBox x:Name="LogsResultFilter"
-                                          Grid.Column="2"
-                                          Width="120"
-                                          Height="36"
-                                          Margin="0,0,8,0"
-                                          VerticalAlignment="Center"
-                                          SelectionChanged="LogsFilter_Changed">
-                                    <ComboBoxItem Content="All Results" IsSelected="True"/>
-                                    <ComboBoxItem Content="Failures"/>
-                                    <ComboBoxItem Content="Passes"/>
-                                </ComboBox>
-                                <TextBox x:Name="LogsSearchBox"
-                                         Grid.Column="3"
-                                         Style="{StaticResource ModernTextBoxStyle}"
-                                         VerticalAlignment="Center"
-                                         TextChanged="LogsSearchBox_TextChanged"/>
-                                <Button Grid.Column="4"
-                                        Content="Clear"
-                                        Style="{StaticResource RoundedButtonStyle}"
-                                        Background="#607D8B"
-                                        Width="96"
-                                        Height="38"
-                                        Margin="8,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Click="ClearLogsFilters_Click"/>
-                                <Button Grid.Column="5"
-                                        Content="Open Log..."
-                                        Style="{StaticResource RoundedButtonStyle}"
-                                        Background="#1A73E8"
-                                        Width="110"
-                                        Height="38"
-                                        Margin="8,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Click="OpenLogFile_Click"/>
+
+                                <WrapPanel Grid.Row="1"
+                                           Grid.ColumnSpan="2"
+                                           Margin="0,14,0,0"
+                                           VerticalAlignment="Top"
+                                           MinHeight="46">
+                                    <ComboBox x:Name="LogsDcFilter"
+                                              Width="190"
+                                              Height="38"
+                                              Margin="0,0,8,6"
+                                              VerticalAlignment="Center"
+                                              SelectionChanged="LogsFilter_Changed"/>
+                                    <ComboBox x:Name="LogsResultFilter"
+                                              Width="150"
+                                              Height="38"
+                                              Margin="0,0,8,6"
+                                              VerticalAlignment="Center"
+                                              SelectionChanged="LogsFilter_Changed"/>
+                                    <ComboBox x:Name="LogsSectionFilter"
+                                              Width="210"
+                                              Height="38"
+                                              Margin="0,0,8,6"
+                                              VerticalAlignment="Center"
+                                              SelectionChanged="LogsFilter_Changed"/>
+                                    <TextBox x:Name="LogsSearchBox"
+                                             Width="260"
+                                             Height="38"
+                                             Margin="0,0,8,6"
+                                             Style="{StaticResource ModernTextBoxStyle}"
+                                             VerticalAlignment="Center"
+                                             TextChanged="LogsSearchBox_TextChanged"
+                                             ToolTip="Search within the visible raw log"/>
+                                    <Button Content="Show Full Log"
+                                            Style="{StaticResource RoundedButtonStyle}"
+                                            Background="#1A73E8"
+                                            Width="120"
+                                            Height="38"
+                                            Margin="0,0,8,6"
+                                            Click="ShowFullLog_Click"/>
+                                    <Button Content="Clear"
+                                            Style="{StaticResource RoundedButtonStyle}"
+                                            Background="#607D8B"
+                                            Width="96"
+                                            Height="38"
+                                            Margin="0,0,8,6"
+                                            Click="ClearLogsFilters_Click"/>
+                                    <Button Content="Open Log..."
+                                            Style="{StaticResource RoundedButtonStyle}"
+                                            Background="#1A73E8"
+                                            Width="110"
+                                            Height="38"
+                                            Margin="0,0,0,6"
+                                            Click="OpenLogFile_Click"/>
+                                </WrapPanel>
                             </Grid>
                         </Border>
 
-                        <Border Grid.Row="1"
+                        <Border Grid.Row="2"
                                 Background="White"
                                 BorderBrush="{StaticResource PanelBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="12"
                                 Padding="14"
-                                Margin="0,0,0,12">
+                                Margin="0,0,0,12"
+                                VerticalAlignment="Top"
+                                Visibility="Collapsed">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -2084,11 +2231,11 @@
                             </Grid>
                         </Border>
 
-                        <Grid Grid.Row="2" Margin="0,0,0,4">
+                        <Grid Grid.Row="3" Margin="0,0,0,4" VerticalAlignment="Stretch">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="1.6*"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
                             <GridSplitter Grid.Column="1"
@@ -2097,7 +2244,8 @@
                                           VerticalAlignment="Stretch"
                                           Background="#D9E4EF"
                                           ShowsPreview="True"
-                                          ResizeDirection="Columns"/>
+                                          ResizeDirection="Columns"
+                                          Visibility="Collapsed"/>
 
                             <Border Grid.Column="0"
                                     Background="White"
@@ -2105,7 +2253,8 @@
                                     BorderThickness="1"
                                     CornerRadius="12"
                                     Padding="0"
-                                    Margin="0,0,8,0">
+                                    Margin="0,0,8,0"
+                                    Visibility="Collapsed">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -2168,7 +2317,7 @@
                                 BorderThickness="1"
                                 CornerRadius="12"
                                 Padding="0"
-                                Margin="8,0,0,0">
+                                Margin="0,0,0,0">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>

@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Net.Mail;
 using System.Reflection;
 using System.Runtime.Versioning;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -54,6 +55,14 @@ public partial class MainWindow : Window, IDisposable
         public DateTime LastWriteUtc { get; init; }
         public string Text { get; init; } = string.Empty;
         public List<TestResult> Results { get; init; } = new();
+    }
+
+    private sealed class ParsedLogSection
+    {
+        public string Service { get; set; } = string.Empty;
+        public string Server { get; set; } = string.Empty;
+        public string Result { get; set; } = string.Empty;
+        public List<string> Lines { get; } = new();
     }
 
     private static bool scheduledRunStarted;
@@ -124,8 +133,14 @@ public partial class MainWindow : Window, IDisposable
     private int lastProgressCompletedSteps = -1;
     private string lastProgressTitle = string.Empty;
     private string lastProgressDetail = string.Empty;
+    private bool isRunInProgress;
+    private string lastEmailFingerprint = string.Empty;
+    private DateTime lastEmailSentUtc = DateTime.MinValue;
     private static readonly TimeSpan ScheduledCollectorTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ScheduledEmailTimeout = TimeSpan.FromSeconds(15);
+    private int currentVisibleLogLineCount;
+    private int currentVisibleSectionCount;
+    private int currentVisibleControllerCount;
 
     private sealed class RunLogSession
     {
@@ -249,7 +264,7 @@ public partial class MainWindow : Window, IDisposable
         int total = allResults.Count;
         int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
         int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
-        string summary = $"Total Tests: {total}\nPassed: {passed}\nFailed: {failed}\nTested DCs: {domainControllers}";
+        string summary = BuildRunSummary(total, passed, failed, dcList);
         string emailAttachment = await WriteResultsSummaryAsync(runSession, allResults, summary, token).ConfigureAwait(true);
         TestResult lastResult = allResults.Last();
         string bodyDetail =
@@ -299,7 +314,6 @@ public partial class MainWindow : Window, IDisposable
     public async Task ShowScheduledResultsAsync(string logFilePath)
     {
         Visibility = Visibility.Visible;
-        WindowState = WindowState.Normal;
         ShowInTaskbar = true;
         Show();
         Activate();
@@ -333,6 +347,7 @@ public partial class MainWindow : Window, IDisposable
 
         DetailsPanel.Visibility = string.IsNullOrWhiteSpace(results) ? Visibility.Collapsed : Visibility.Visible;
         UpdateHealthResultsLayout();
+        UpdateHealthSummaryText();
         Activate();
     }
 
@@ -340,6 +355,47 @@ public partial class MainWindow : Window, IDisposable
     {
         bool showDetails = DetailsPanel.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(latestRunDetailsText);
         DetailsPanel.Visibility = showDetails ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateHealthSummaryText()
+    {
+        if (HealthSummaryText == null)
+        {
+            return;
+        }
+
+        int configuredControllers = CountConfiguredDomainControllers();
+        int visibleControllers = allResults
+            .Select(result => result.Server)
+            .Where(server => !string.IsNullOrWhiteSpace(server))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        int total = allResults.Count;
+        int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
+        int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
+        int activeFindings = GetActiveFindings().Count();
+
+        if (total == 0)
+        {
+            HealthSummaryText.Text = "No run data loaded yet.";
+            return;
+        }
+
+        HealthSummaryText.Text =
+            $"Current view shows {total} test result(s) across {visibleControllers} of {configuredControllers} configured domain controller(s). " +
+            $"{passed} passed, {failed} failed, and {activeFindings} actionable finding(s) are open. Each result row represents one test section, not a whole controller run.";
+    }
+
+    private void SetRunInProgress(bool inProgress)
+    {
+        isRunInProgress = inProgress;
+        Mouse.OverrideCursor = inProgress ? Cursors.Wait : null;
+        if (ProgressPanel != null)
+        {
+            ProgressPanel.IsEnabled = true;
+        }
+
+        UpdateActionButtonStates();
     }
 
     private void ShowRunProgress(string title, string detail, int completedSteps, int totalSteps)
@@ -364,6 +420,7 @@ public partial class MainWindow : Window, IDisposable
         RunProgressPercentText.Text = $"{percentage:0}%";
         RunProgressCountText.Text = $"{Math.Min(completedSteps, safeTotalSteps)} / {safeTotalSteps} steps completed";
         TestProgressBar.Maximum = 100;
+        TestProgressBar.IsIndeterminate = completedSteps <= 0;
         TestProgressBar.Value = percentage;
         lastProgressUiUpdateUtc = now;
         lastProgressCompletedSteps = completedSteps;
@@ -378,6 +435,7 @@ public partial class MainWindow : Window, IDisposable
         RunProgressDetailText.Text = "Preparing to run diagnostics.";
         RunProgressPercentText.Text = "0%";
         RunProgressCountText.Text = "0 / 0 steps completed";
+        TestProgressBar.IsIndeterminate = false;
         TestProgressBar.Value = 0;
         TestProgressBar.Maximum = 100;
         lastProgressCompletedSteps = -1;
@@ -390,7 +448,7 @@ public partial class MainWindow : Window, IDisposable
     {
         if (string.IsNullOrWhiteSpace(logFilePath) || !File.Exists(logFilePath))
         {
-            MessageBox.Show("Scheduled log file not found.", "View Results", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "View Results", "Scheduled log file not found.", isError: true);
             return;
         }
 
@@ -411,8 +469,7 @@ public partial class MainWindow : Window, IDisposable
                 () => ParseDCDiagOutput("Scheduled", output, logFilePath).ToList()).ConfigureAwait(true);
             if (scheduledLogCache.Count >= 20)
             {
-                string oldestKey = scheduledLogCache.OrderBy(kvp => kvp.Value.LastWriteUtc).First().Key;
-                scheduledLogCache.Remove(oldestKey);
+                RemoveOldestScheduledLogCacheEntry();
             }
             scheduledLogCache[logFilePath] = new CachedScheduledLog
             {
@@ -429,7 +486,7 @@ public partial class MainWindow : Window, IDisposable
         latestLogsFilePath = logFilePath;
         latestLogsText = output;
         DisplayTestResults(output);
-        RefreshDashboard();
+        ForceRefreshDashboard();
         Debug.WriteLine($"Scheduled log '{Path.GetFileName(logFilePath)}' loaded in {loadStopwatch.ElapsedMilliseconds}ms.");
         Activate();
     }
@@ -502,7 +559,7 @@ public partial class MainWindow : Window, IDisposable
             }
             else
             {
-                MessageBox.Show("Error loading application state: " + ex.Message, "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotificationService.Show(this, "Startup Error", "Error loading application state: " + ex.Message, isError: true);
             }
         }
     }
@@ -540,6 +597,20 @@ public partial class MainWindow : Window, IDisposable
     {
         try
         {
+            TestHistoryEntry? existingDuplicate = historyEntries.FirstOrDefault(existing =>
+                existing.Total == entry.Total &&
+                existing.Passed == entry.Passed &&
+                existing.Failed == entry.Failed &&
+                string.Equals(existing.TestType, entry.TestType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(existing.Details, entry.Details, StringComparison.Ordinal) &&
+                string.Equals(existing.LogFilePath, entry.LogFilePath, StringComparison.OrdinalIgnoreCase) &&
+                Math.Abs((existing.RunDate - entry.RunDate).TotalMinutes) < 2);
+
+            if (existingDuplicate != null)
+            {
+                return;
+            }
+
             historyEntries.Add(entry);
             historyEntries = historyEntries
                 .OrderByDescending(x => x.RunDate)
@@ -560,7 +631,7 @@ public partial class MainWindow : Window, IDisposable
             }
             else
             {
-                MessageBox.Show("Error saving test history: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotificationService.Show(this, "Error", "Error saving test history: " + ex.Message, isError: true);
             }
         }
     }
@@ -579,7 +650,7 @@ public partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Error loading test history: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Error", "Error loading test history: " + ex.Message, isError: true);
         }
     }
 
@@ -607,7 +678,7 @@ public partial class MainWindow : Window, IDisposable
             string logFilePath = entry.LogFilePath ?? string.Empty;
             if (string.IsNullOrWhiteSpace(logFilePath))
             {
-                MessageBox.Show("The selected run does not have a log file path.", "View Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                NotificationService.Show(this, "View Selected", "The selected run does not have a log file path.");
                 return;
             }
 
@@ -616,7 +687,7 @@ public partial class MainWindow : Window, IDisposable
         }
         else
         {
-            MessageBox.Show("Please select exactly one history run to open.", "View Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+            NotificationService.Show(this, "View Selected", "Please select exactly one history run to open.");
         }
     }
 
@@ -650,7 +721,7 @@ public partial class MainWindow : Window, IDisposable
         }
         else
         {
-            MessageBox.Show("Please select a test history entry to delete.", "Delete History", MessageBoxButton.OK, MessageBoxImage.Information);
+            NotificationService.Show(this, "Delete History", "Please select a test history entry to delete.");
         }
     }
 
@@ -891,6 +962,12 @@ public partial class MainWindow : Window, IDisposable
         RefreshDashboardCore();
     }
 
+    private void ForceRefreshDashboard()
+    {
+        _dashboardHash = null;
+        RefreshDashboardNow();
+    }
+
     private async Task PersistHistoryAsync()
     {
         try
@@ -906,7 +983,7 @@ public partial class MainWindow : Window, IDisposable
             }
             else
             {
-                MessageBox.Show("Error saving test history: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotificationService.Show(this, "Error", "Error saving test history: " + ex.Message, isError: true);
             }
         }
     }
@@ -941,11 +1018,16 @@ public partial class MainWindow : Window, IDisposable
     private void UpdateActionButtonStates()
     {
         bool hasResults = allResults.Count > 0;
+        RunButton.IsEnabled = !isRunInProgress;
+        StopButton.IsEnabled = isRunInProgress;
         ExportButton.IsEnabled = hasResults;
         ExecutiveSummaryButton.IsEnabled = hasResults;
         SearchBox.IsEnabled = hasResults;
         SearchButton.IsEnabled = hasResults;
         ViewSelectedLogButton.IsEnabled = testResultsGrid.SelectedItems.Count > 0;
+        OpenFindingLogButton.IsEnabled = dgFindings?.SelectedItem is AdHealthFinding finding &&
+                                         !string.IsNullOrWhiteSpace(finding.LogFilePath) &&
+                                         File.Exists(finding.LogFilePath);
     }
 
     private void SyncHistoryItems(IEnumerable<TestHistoryEntry> items)
@@ -998,6 +1080,30 @@ public partial class MainWindow : Window, IDisposable
         {
             target.Add(sourceItems[index]);
             index++;
+        }
+    }
+
+    private void RemoveOldestScheduledLogCacheEntry()
+    {
+        if (scheduledLogCache.Count == 0)
+        {
+            return;
+        }
+
+        string? oldestKey = null;
+        DateTime oldestWriteUtc = DateTime.MaxValue;
+        foreach ((string key, CachedScheduledLog value) in scheduledLogCache)
+        {
+            if (value.LastWriteUtc < oldestWriteUtc)
+            {
+                oldestWriteUtc = value.LastWriteUtc;
+                oldestKey = key;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(oldestKey))
+        {
+            scheduledLogCache.Remove(oldestKey);
         }
     }
 
@@ -1075,10 +1181,11 @@ public partial class MainWindow : Window, IDisposable
         }
 
         string searchText = LogsSearchBox?.Text?.Trim().ToLowerInvariant() ?? string.Empty;
-        string selectedDc = LogsDcFilter?.SelectedItem as string ?? "All Controllers";
-        string selectedResult = (LogsResultFilter?.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "All Results";
+        string selectedDc = LogsDcFilter?.SelectedItem as string ?? "All domain controllers";
+        string selectedResult = LogsResultFilter?.SelectedItem as string ?? "All Results";
+        string selectedSection = LogsSectionFilter?.SelectedItem as string ?? "All test sections";
 
-        if (!selectedDc.Equals("All Controllers", StringComparison.OrdinalIgnoreCase) &&
+        if (!selectedDc.Equals("All domain controllers", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(result.Server, selectedDc, StringComparison.OrdinalIgnoreCase))
         {
             return false;
@@ -1092,6 +1199,12 @@ public partial class MainWindow : Window, IDisposable
 
         if (selectedResult.Equals("Passes", StringComparison.OrdinalIgnoreCase) &&
             !result.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!selectedSection.Equals("All test sections", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(result.Service, selectedSection, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -1111,7 +1224,7 @@ public partial class MainWindow : Window, IDisposable
     {
         if (dgTestHistory.SelectedItems.Count != 2)
         {
-            MessageBox.Show("Select exactly two history runs to compare.", "Compare Runs", MessageBoxButton.OK, MessageBoxImage.Information);
+            NotificationService.Show(this, "Compare Runs", "Select exactly two history runs to compare.");
             return;
         }
 
@@ -1205,6 +1318,7 @@ public partial class MainWindow : Window, IDisposable
         dgFindings.ItemsSource = null;
         dgSecurityFindings.ItemsSource = null;
         UpdateHealthResultsLayout();
+        UpdateHealthSummaryText();
         HideRunProgress();
         RefreshDashboard();
     }
@@ -1387,7 +1501,7 @@ public partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Failed to create Windows scheduled task: " + ex.Message, "Task Scheduler Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Task Scheduler Error", "Failed to create Windows scheduled task: " + ex.Message, isError: true);
             return false;
         }
     }
@@ -1426,7 +1540,7 @@ public partial class MainWindow : Window, IDisposable
 
         if (dcEntries.Count == 0)
         {
-            MessageBox.Show("Please enter at least one domain controller.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            NotificationService.Show(this, "Validation Error", "Please enter at least one domain controller.", isError: true);
             return;
         }
 
@@ -1437,7 +1551,7 @@ public partial class MainWindow : Window, IDisposable
 
         if (string.IsNullOrEmpty(taskName) || string.IsNullOrEmpty(domainControllers) || string.IsNullOrEmpty(frequency) || !startDate.HasValue || string.IsNullOrEmpty(startTime))
         {
-            MessageBox.Show("Please fill in all fields.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            NotificationService.Show(this, "Validation Error", "Please fill in all fields.", isError: true);
             return;
         }
 
@@ -1478,7 +1592,7 @@ public partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Failed to save the Windows scheduled task: " + ex.Message, "Task Scheduler Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Task Scheduler Error", "Failed to save the Windows scheduled task: " + ex.Message, isError: true);
             return;
         }
 
@@ -1501,7 +1615,7 @@ public partial class MainWindow : Window, IDisposable
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to remove the Windows scheduled task: " + ex.Message, "Task Scheduler Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotificationService.Show(this, "Task Scheduler Error", "Failed to remove the Windows scheduled task: " + ex.Message, isError: true);
                 return;
             }
 
@@ -1512,7 +1626,7 @@ public partial class MainWindow : Window, IDisposable
         }
         else
         {
-            MessageBox.Show("Please select a task to remove.", "Remove Task", MessageBoxButton.OK, MessageBoxImage.Warning);
+            NotificationService.Show(this, "Remove Task", "Please select a task to remove.", isError: true);
         }
     }
 
@@ -1907,9 +2021,7 @@ public partial class MainWindow : Window, IDisposable
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
         cancellationTokenSource?.Cancel();
-        StopButton.IsEnabled = false;
-        HideRunProgress();
-        MessageBox.Show("Test execution stopped by user.", "Stopped", MessageBoxButton.OK, MessageBoxImage.Information);
+        UpdateActionButtonStates();
     }
 
     private static string GetRunsRootDirectoryPath()
@@ -1994,12 +2106,20 @@ public partial class MainWindow : Window, IDisposable
 
     private async void RunButton_Click(object sender, RoutedEventArgs e)
     {
+        if (isRunInProgress)
+        {
+            return;
+        }
+
+        isRunInProgress = true;
+        UpdateActionButtonStates();
         Stopwatch runStopwatch = Stopwatch.StartNew();
         DateTime runStartedAt = DateTime.Now;
         await EnsureStartupInitializedAsync().ConfigureAwait(true);
         if (string.IsNullOrEmpty(domainControllers))
         {
-            MessageBox.Show("No domain controllers specified. Please configure settings first.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            SetRunInProgress(false);
+            NotificationService.Show(this, "Error", "No domain controllers specified. Please configure settings first.", isError: true);
             return;
         }
 
@@ -2008,13 +2128,14 @@ public partial class MainWindow : Window, IDisposable
             string lotteryMessage = $"Good find congrats!\n\nYour Lucky numbers are:\n {GenerateLotteryNumbers()}\n\nGood Luck! 🤞";
             ShowLotteryPopup(lotteryMessage);
             SendEmailWithAttachment("Lottery Notification", lotteryMessage, string.Empty);
+            SetRunInProgress(false);
             return;
         }
 
         cancellationTokenSource?.Dispose();
         cancellationTokenSource = new CancellationTokenSource();
         CancellationToken token = cancellationTokenSource.Token;
-        StopButton.IsEnabled = true;
+        SetRunInProgress(true);
         allResults.Clear();
         List<string> logFilePaths = new();
         RunLogSession runSession = CreateRunLogSession(runStartedAt, "Manual");
@@ -2037,152 +2158,165 @@ public partial class MainWindow : Window, IDisposable
         const int supplementalSteps = 2;
         int totalSteps = (dcList.Length * stepsPerController) + supplementalSteps;
         int completedSteps = 0;
+        bool wasCancelled = false;
         ShowRunProgress(
             "Running domain controller diagnostics",
             $"Starting validation across {dcList.Length} domain controller(s).",
             completedSteps,
             totalSteps);
-
-        for (int index = 0; index < dcList.Length; index++)
+        try
         {
-            string dc = dcList[index];
-
-            if (token.IsCancellationRequested)
+            for (int index = 0; index < dcList.Length; index++)
             {
-                HideRunProgress();
-                StopButton.IsEnabled = false;
-                MessageBox.Show("Test execution stopped by user.", "Stopped", MessageBoxButton.OK, MessageBoxImage.Information);
-                break;
-            }
+                string dc = dcList[index];
 
-            ShowRunProgress(
-                "Running domain controller diagnostics",
-                $"[{dc}] Running DCDiag checks ({index + 1} of {dcList.Length} controllers).",
-                completedSteps,
-                totalSteps);
+                if (token.IsCancellationRequested)
+                {
+                    wasCancelled = true;
+                    NotificationService.Show(this, "Stopped", "Test execution stopped by user.");
+                    break;
+                }
 
-            string logFilePath = GetControllerLogPath(runSession, dc);
+                ShowRunProgress(
+                    "Running domain controller diagnostics",
+                    $"[{dc}] Running DCDiag checks ({index + 1} of {dcList.Length} controllers).",
+                    completedSteps,
+                    totalSteps);
 
-            string dcdiagResult = await RunCommandAsync($"dcdiag /s:{dc} /c /v", logFilePath, token);
-            completedSteps += 1;
-            ShowRunProgress(
-                "Running domain controller diagnostics",
-                $"[{dc}] DCDiag complete. Running replication checks next.",
-                completedSteps,
-                totalSteps);
+                string logFilePath = GetControllerLogPath(runSession, dc);
 
-            allResults.AddRange(ParseDCDiagOutput(dc, dcdiagResult, logFilePath));
-            logFilePaths.Add(logFilePath);
-
-            if (testDnsCheck)
-            {
-                allResults.AddRange(await RunDnsCheckAsync(dc, logFilePath, token));
+                string dcdiagResult = await RunCommandAsync($"dcdiag /s:{dc} /c /v", logFilePath, token);
                 completedSteps += 1;
-                ShowRunProgress("Running optional tests", $"[{dc}] DNS check complete.", completedSteps, totalSteps);
+                ShowRunProgress(
+                    "Running domain controller diagnostics",
+                    $"[{dc}] DCDiag complete. Running replication checks next.",
+                    completedSteps,
+                    totalSteps);
+
+                allResults.AddRange(ParseDCDiagOutput(dc, dcdiagResult, logFilePath));
+                logFilePaths.Add(logFilePath);
+
+                if (testDnsCheck)
+                {
+                    allResults.AddRange(await RunDnsCheckAsync(dc, logFilePath, token));
+                    completedSteps += 1;
+                    ShowRunProgress("Running optional tests", $"[{dc}] DNS check complete.", completedSteps, totalSteps);
+                }
+
+                if (testReplication)
+                {
+                    string replOutput = await RunCommandAsync($"repadmin /showrepl {dc}", logFilePath, token);
+                    allResults.AddRange(ParseDCDiagOutput(dc, replOutput, logFilePath));
+                    completedSteps += 1;
+                    ShowRunProgress("Running optional tests", $"[{dc}] Replication check complete.", completedSteps, totalSteps);
+                }
+
+                if (testTimeSkew)
+                {
+                    allResults.AddRange(await RunTimeSkewCheckAsync(dc, logFilePath, token));
+                    completedSteps += 1;
+                    ShowRunProgress("Running optional tests", $"[{dc}] Time skew check complete.", completedSteps, totalSteps);
+                }
+
+                if (testLdapBind)
+                {
+                    allResults.AddRange(await RunLdapBindCheckAsync(dc, logFilePath, token));
+                    completedSteps += 1;
+                    ShowRunProgress("Running optional tests", $"[{dc}] LDAP bind check complete.", completedSteps, totalSteps);
+                }
+
+                if (testCertDhcp)
+                {
+                    allResults.AddRange(await RunCertDhcpCheckAsync(dc, logFilePath, token));
+                    completedSteps += 1;
+                    ShowRunProgress("Running optional tests", $"[{dc}] Cert/DHCP check complete.", completedSteps, totalSteps);
+                }
+
+                if (testSmbLdapSigning)
+                {
+                    allResults.AddRange(await RunSmbLdapSigningCheckAsync(dc, logFilePath, token));
+                    completedSteps += 1;
+                    ShowRunProgress("Running optional tests", $"[{dc}] SMB/LDAP signing check complete.", completedSteps, totalSteps);
+                }
             }
 
-            if (testReplication)
+            if (wasCancelled)
             {
-                string replOutput = await RunCommandAsync($"repadmin /showrepl {dc}", logFilePath, token);
-                allResults.AddRange(ParseDCDiagOutput(dc, replOutput, logFilePath));
-                completedSteps += 1;
-                ShowRunProgress("Running optional tests", $"[{dc}] Replication check complete.", completedSteps, totalSteps);
+                return;
             }
 
-            if (testTimeSkew)
-            {
-                allResults.AddRange(await RunTimeSkewCheckAsync(dc, logFilePath, token));
-                completedSteps += 1;
-                ShowRunProgress("Running optional tests", $"[{dc}] Time skew check complete.", completedSteps, totalSteps);
-            }
-
-            if (testLdapBind)
-            {
-                allResults.AddRange(await RunLdapBindCheckAsync(dc, logFilePath, token));
-                completedSteps += 1;
-                ShowRunProgress("Running optional tests", $"[{dc}] LDAP bind check complete.", completedSteps, totalSteps);
-            }
-
-            if (testCertDhcp)
-            {
-                allResults.AddRange(await RunCertDhcpCheckAsync(dc, logFilePath, token));
-                completedSteps += 1;
-                ShowRunProgress("Running optional tests", $"[{dc}] Cert/DHCP check complete.", completedSteps, totalSteps);
-            }
-
-            if (testSmbLdapSigning)
-            {
-                allResults.AddRange(await RunSmbLdapSigningCheckAsync(dc, logFilePath, token));
-                completedSteps += 1;
-                ShowRunProgress("Running optional tests", $"[{dc}] SMB/LDAP signing check complete.", completedSteps, totalSteps);
-            }
-        }
-
-        ShowRunProgress(
-            "Collecting supplemental data",
-            "Refreshing inventory and telemetry collectors before the dashboard is updated.",
-            completedSteps,
-            totalSteps);
-        await CollectSupplementalDataAsync(token, detail =>
-        {
-            completedSteps += 1;
             ShowRunProgress(
                 "Collecting supplemental data",
-                detail,
+                "Refreshing inventory and telemetry collectors before the dashboard is updated.",
                 completedSteps,
                 totalSteps);
-        });
-        RebuildFindings();
-        SyncResultItems();
-        ShowRunProgress(
-            "Finalizing results",
-            "Supplemental collection complete. Updating findings, grids, and dashboard summaries.",
-            completedSteps,
-            totalSteps);
-        HideRunProgress();
+            await CollectSupplementalDataAsync(token, detail =>
+            {
+                completedSteps += 1;
+                ShowRunProgress(
+                    "Collecting supplemental data",
+                    detail,
+                    completedSteps,
+                    totalSteps);
+            });
+            RebuildFindings();
+            SyncResultItems();
+            ShowRunProgress(
+                "Finalizing results",
+                "Supplemental collection complete. Updating findings, grids, and dashboard summaries.",
+                completedSteps,
+                totalSteps);
 
-        if (!allResults.Any())
-        {
-            StopButton.IsEnabled = false;
-            return;
+            if (!allResults.Any())
+            {
+                return;
+            }
+
+            string combinedLogPath = runSession.CombinedLogPath;
+            await WriteCombinedLogAsync(logFilePaths, combinedLogPath, token);
+            latestLogsFilePath = combinedLogPath;
+            latestLogsText = File.Exists(combinedLogPath) ? await File.ReadAllTextAsync(combinedLogPath, token).ConfigureAwait(true) : string.Empty;
+
+            int total = allResults.Count;
+            int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
+            int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
+            string summary = BuildRunSummary(total, passed, failed, dcList);
+            DisplayTestResults(summary);
+            ForceRefreshDashboard();
+            TestResult lastResult = allResults.Last();
+            string bodyDetail =
+                $"<p><strong>Service:</strong> {lastResult.Service}</p>\r\n" +
+                $"<p><strong>Server:</strong> {lastResult.Server}</p>\r\n" +
+                $"<p><strong>Result:</strong> {lastResult.Result}</p>\r\n" +
+                $"<p><strong>Message:</strong> {lastResult.Message}</p>" +
+                "<br/><br/><strong>Summary:</strong><br/>" + summary.Replace(Environment.NewLine, "<br/>");
+
+            string subject = failed > 0 ? "[FAILED] Test Completed - ADG Test Results" : "Test Completed - ADG Test Results";
+            string emailAttachment = WriteResultsSummarySync(runSession, allResults, summary);
+            if (sendEmailManual && !string.IsNullOrWhiteSpace(recipientEmail))
+            {
+                SendEmailWithAttachment(subject, bodyDetail, emailAttachment);
+            }
+
+            await SaveTestHistoryAsync(new TestHistoryEntry
+            {
+                RunDate = DateTime.Now,
+                Total = total,
+                Passed = passed,
+                Failed = failed,
+                Details = summary,
+                LogFilePath = combinedLogPath,
+                TestType = runSession.TestType
+            });
+            _ = CleanupLogFilesAsync();
+            Debug.WriteLine($"Manual run completed in {runStopwatch.ElapsedMilliseconds}ms.");
+            new SuccessNotification("Test Complete", $"Tests completed. {passed} passed, {failed} failed out of {total} total.").ShowDialog();
         }
-
-        string combinedLogPath = runSession.CombinedLogPath;
-        await WriteCombinedLogAsync(logFilePaths, combinedLogPath, token);
-        latestLogsFilePath = combinedLogPath;
-        latestLogsText = File.Exists(combinedLogPath) ? await File.ReadAllTextAsync(combinedLogPath, token).ConfigureAwait(true) : string.Empty;
-
-        int total = allResults.Count;
-        int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-        int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
-        string summary = $"Total Tests: {total}\nPassed: {passed}\nFailed: {failed}\nTested DCs: {domainControllers}";
-        DisplayTestResults(summary);
-        TestResult lastResult = allResults.Last();
-        string bodyDetail =
-            $"<p><strong>Service:</strong> {lastResult.Service}</p>\r\n" +
-            $"<p><strong>Server:</strong> {lastResult.Server}</p>\r\n" +
-            $"<p><strong>Result:</strong> {lastResult.Result}</p>\r\n" +
-            $"<p><strong>Message:</strong> {lastResult.Message}</p>" +
-            "<br/><br/><strong>Summary:</strong><br/>" + summary.Replace("\n", "<br/>");
-
-        string subject = failed > 0 ? "[FAILED] Test Completed - ADG Test Results" : "Test Completed - ADG Test Results";
-        string emailAttachment = WriteResultsSummarySync(runSession, allResults, summary);
-        if (sendEmailManual && !string.IsNullOrWhiteSpace(recipientEmail))
-            SendEmailWithAttachment(subject, bodyDetail, emailAttachment);
-        await SaveTestHistoryAsync(new TestHistoryEntry
+        finally
         {
-            RunDate = DateTime.Now,
-            Total = total,
-            Passed = passed,
-            Failed = failed,
-            Details = summary,
-            LogFilePath = combinedLogPath,
-            TestType = runSession.TestType
-        });
-        _ = CleanupLogFilesAsync();
-        Debug.WriteLine($"Manual run completed in {runStopwatch.ElapsedMilliseconds}ms.");
-        new SuccessNotification("Test Complete", $"Tests completed. {passed} passed, {failed} failed out of {total} total.").ShowDialog();
-        StopButton.IsEnabled = false;
+            HideRunProgress();
+            SetRunInProgress(false);
+        }
     }
 
     private async Task CollectSupplementalDataAsync(CancellationToken token, Action<string>? stageCompleted = null)
@@ -2287,11 +2421,32 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
+    private static string BuildRunSummary(int total, int passed, int failed, IEnumerable<string> controllers)
+    {
+        string[] dcList = controllers
+            .Where(controller => !string.IsNullOrWhiteSpace(controller))
+            .Select(controller => controller.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return string.Join(
+            Environment.NewLine,
+            [
+                $"Domain controllers tested: {dcList.Length}",
+                $"Controllers: {string.Join(", ", dcList)}",
+                $"Total tests: {total}",
+                $"Passed: {passed}",
+                $"Failed: {failed}"
+            ]);
+    }
+
     private static string WriteResultsSummarySync(RunLogSession session, List<TestResult> results, string summary)
     {
         string path = Path.Combine(session.RunDirectoryPath, "ResultsSummary.txt");
         try
         {
+            int serviceWidth = Math.Max(12, results.Any() ? results.Max(r => r.Service?.Length ?? 0) : 0);
+            int serverWidth = Math.Max(10, results.Any() ? results.Max(r => r.Server?.Length ?? 0) : 0);
             using StreamWriter writer = new(path, false);
             writer.WriteLine("AD Guardian - Test Results Summary");
             writer.WriteLine($"Run: {session.StartedAt:dd MMM yyyy HH:mm}");
@@ -2300,9 +2455,11 @@ public partial class MainWindow : Window, IDisposable
             writer.WriteLine(summary);
             writer.WriteLine();
             writer.WriteLine("--- Detailed Results ---");
+            writer.WriteLine($"{PadRight("Service", serviceWidth)}  {PadRight("Server", serverWidth)}  Result  Message");
+            writer.WriteLine($"{new string('-', serviceWidth)}  {new string('-', serverWidth)}  ------  -------");
             foreach (TestResult r in results)
             {
-                writer.WriteLine($"{r.Service,-30} {r.Server,-20} {r.Result,-6} {r.Message}");
+                writer.WriteLine($"{PadRight(r.Service, serviceWidth)}  {PadRight(r.Server, serverWidth)}  {PadRight(r.Result, 6)}  {r.Message}");
             }
         }
         catch { }
@@ -2314,6 +2471,8 @@ public partial class MainWindow : Window, IDisposable
         string path = Path.Combine(session.RunDirectoryPath, "ResultsSummary.txt");
         try
         {
+            int serviceWidth = Math.Max(12, results.Any() ? results.Max(r => r.Service?.Length ?? 0) : 0);
+            int serverWidth = Math.Max(10, results.Any() ? results.Max(r => r.Server?.Length ?? 0) : 0);
             await using StreamWriter writer = new(path, false);
             await writer.WriteLineAsync("AD Guardian - Test Results Summary");
             await writer.WriteLineAsync($"Run: {session.StartedAt:dd MMM yyyy HH:mm}");
@@ -2322,20 +2481,39 @@ public partial class MainWindow : Window, IDisposable
             await writer.WriteLineAsync(summary);
             await writer.WriteLineAsync();
             await writer.WriteLineAsync("--- Detailed Results ---");
+            await writer.WriteLineAsync($"{PadRight("Service", serviceWidth)}  {PadRight("Server", serverWidth)}  Result  Message");
+            await writer.WriteLineAsync($"{new string('-', serviceWidth)}  {new string('-', serverWidth)}  ------  -------");
             foreach (TestResult r in results)
             {
-                await writer.WriteLineAsync($"{r.Service,-30} {r.Server,-20} {r.Result,-6} {r.Message}");
+                await writer.WriteLineAsync($"{PadRight(r.Service, serviceWidth)}  {PadRight(r.Server, serverWidth)}  {PadRight(r.Result, 6)}  {r.Message}");
             }
         }
         catch { }
         return path;
     }
 
+    private static string PadRight(string? value, int width)
+    {
+        return (value ?? string.Empty).PadRight(width);
+    }
+
     private string? _dashboardHash;
 
     private void RefreshDashboardCore()
     {
-        string newHash = $"{allResults.Count}|{allFindings.Count}|{historyEntries.Count}|{latestInventory.ForestName}";
+        string newHash = string.Join("|",
+            allResults.Count,
+            allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)),
+            allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)),
+            allFindings.Count,
+            allFindings.Count(f => f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase)),
+            allFindings.Count(f => f.Severity.Equals("High", StringComparison.OrdinalIgnoreCase)),
+            allFindings.Count(f => f.Severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)),
+            historyEntries.Count,
+            historyEntries.FirstOrDefault()?.RunDate.Ticks ?? 0,
+            latestInventory.ForestName,
+            latestInventory.DomainControllerCount,
+            latestTelemetry.TotalServices);
         if (_dashboardHash == newHash) return;
         _dashboardHash = newHash;
 
@@ -2394,6 +2572,7 @@ public partial class MainWindow : Window, IDisposable
         findingItemsView?.Refresh();
         RefreshLogsView();
         UpdateLogsWorkspaceSummary();
+        UpdateHealthSummaryText();
         UpdateSecurityGrid();
         RefreshHomeFindingsSummary();
         if (MainTabControl.SelectedIndex == 0)
@@ -2846,7 +3025,29 @@ public partial class MainWindow : Window, IDisposable
 
         allFindings.AddRange(latestInventory.Findings);
         allFindings.AddRange(latestTelemetry.Findings);
+        List<AdHealthFinding> deduplicatedFindings = allFindings
+            .GroupBy(BuildFindingKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderByDescending(finding => SeverityRank(finding.Severity))
+            .ThenBy(finding => finding.Category, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(finding => finding.Target, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(finding => finding.Summary, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        allFindings.Clear();
+        allFindings.AddRange(deduplicatedFindings);
         SyncFindingItems();
+    }
+
+    private static string BuildFindingKey(AdHealthFinding finding)
+    {
+        return string.Join("|",
+            finding.Category ?? string.Empty,
+            finding.Severity ?? string.Empty,
+            finding.Source ?? string.Empty,
+            finding.Target ?? string.Empty,
+            finding.Summary ?? string.Empty,
+            finding.Status ?? string.Empty,
+            finding.LogFilePath ?? string.Empty);
     }
 
     private IEnumerable<AdHealthFinding> GetActiveFindings()
@@ -3026,6 +3227,7 @@ public partial class MainWindow : Window, IDisposable
             LogsFileNameText.Text = string.IsNullOrWhiteSpace(latestLogsFilePath)
                 ? "Current summary view"
                 : Path.GetFileName(latestLogsFilePath);
+            RefreshLogSectionEntries(logsText, latestLogsFilePath);
             logsTextPending = false;
         }
         catch (Exception ex)
@@ -3097,12 +3299,13 @@ public partial class MainWindow : Window, IDisposable
             latestLogsFilePath = logFilePath;
             LogsListBox.ItemsSource = GetCachedLogLines(latestLogsText);
             LogsFileNameText.Text = Path.GetFileName(logFilePath);
+            RefreshLogSectionEntries(latestLogsText, latestLogsFilePath);
             logsTextPending = false;
             _ = NavigateToSectionAsync(5);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to load log file: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Error", $"Failed to load log file: {ex.Message}", isError: true);
         }
     }
 
@@ -3140,6 +3343,29 @@ public partial class MainWindow : Window, IDisposable
             IsEnabled = previousEnabledState;
             Activate();
         }
+    }
+
+    private void RefreshLogSectionEntries(string logText, string logFilePath)
+    {
+        IReadOnlyList<TestResult> sectionResults = Array.Empty<TestResult>();
+        if (!string.IsNullOrWhiteSpace(logText))
+        {
+            sectionResults = ParseDCDiagOutput("Log", logText, logFilePath).ToList();
+        }
+
+        if (sectionResults.Count == 0 && allResults.Count > 0)
+        {
+            sectionResults = allResults;
+        }
+
+        ReplaceCollection(logResultItems, sectionResults);
+        using (logResultItemsView?.DeferRefresh())
+        {
+        }
+
+        RefreshLogsFilterOptions();
+        RefreshLogsView();
+        UpdateLogsWorkspaceSummary();
     }
 
     private static void ExportResultsToFile(string filePath, IReadOnlyCollection<TestResult> results)
@@ -3283,8 +3509,22 @@ public partial class MainWindow : Window, IDisposable
     {
         if (LogsDcFilter.Items.Count == 0)
         {
-            LogsDcFilter.Items.Add("All Controllers");
+            LogsDcFilter.Items.Add("All domain controllers");
             LogsDcFilter.SelectedIndex = 0;
+        }
+
+        if (LogsResultFilter != null && LogsResultFilter.Items.Count == 0)
+        {
+            LogsResultFilter.Items.Add("All Results");
+            LogsResultFilter.Items.Add("Failures");
+            LogsResultFilter.Items.Add("Passes");
+            LogsResultFilter.SelectedIndex = 0;
+        }
+
+        if (LogsSectionFilter != null && LogsSectionFilter.Items.Count == 0)
+        {
+            LogsSectionFilter.Items.Add("All test sections");
+            LogsSectionFilter.SelectedIndex = 0;
         }
     }
 
@@ -3311,6 +3551,7 @@ public partial class MainWindow : Window, IDisposable
     private void RefreshLogsView()
     {
         logResultItemsView?.Refresh();
+        RefreshVisibleLogViewer();
     }
 
     private void UpdateLogsWorkspaceSummary()
@@ -3331,9 +3572,25 @@ public partial class MainWindow : Window, IDisposable
         LogsVisibleCountText.Text = visibleItems.Count.ToString(CultureInfo.InvariantCulture);
         LogsFailureCountText.Text = failures.ToString(CultureInfo.InvariantCulture);
         LogsPassCountText.Text = passes.ToString(CultureInfo.InvariantCulture);
-        LogsSummaryText.Text = visibleItems.Count == 0
-            ? "No log entries match the current filters."
-            : $"{visibleItems.Count} visible log entr{(visibleItems.Count == 1 ? "y" : "ies")} across {visibleItems.Select(item => item.Server).Distinct(StringComparer.OrdinalIgnoreCase).Count()} controller(s).";
+        string selectedController = LogsDcFilter?.SelectedItem as string ?? "All domain controllers";
+        string selectedResult = LogsResultFilter?.SelectedItem as string ?? "All Results";
+        string selectedSection = LogsSectionFilter?.SelectedItem as string ?? "All test sections";
+        bool hasSearch = !string.IsNullOrWhiteSpace(LogsSearchBox?.Text);
+
+        if (currentVisibleLogLineCount == 0)
+        {
+            LogsSummaryText.Text = "No log content matches the current controller, section, and text filters.";
+        }
+        else
+        {
+            LogsSummaryText.Text =
+                $"Showing {currentVisibleLogLineCount} log line{(currentVisibleLogLineCount == 1 ? string.Empty : "s")} " +
+                $"from {currentVisibleSectionCount} section{(currentVisibleSectionCount == 1 ? string.Empty : "s")} " +
+                $"across {currentVisibleControllerCount} domain controller{(currentVisibleControllerCount == 1 ? string.Empty : "s")}. " +
+                $"Controller: {selectedController}. Result: {selectedResult}. Section: {selectedSection}. " +
+                (hasSearch ? "Text search is applied to the visible raw log." : "Use search to narrow the visible raw log text.");
+        }
+
         LogsFileNameText.Text = string.IsNullOrWhiteSpace(latestLogsFilePath)
             ? "Current summary view"
             : Path.GetFileName(latestLogsFilePath);
@@ -3341,7 +3598,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void RefreshLogsFilterOptions()
     {
-        if (LogsDcFilter == null)
+        if (LogsDcFilter == null || LogsResultFilter == null || LogsSectionFilter == null)
         {
             return;
         }
@@ -3349,28 +3606,68 @@ public partial class MainWindow : Window, IDisposable
         suppressLogsFilterEvents = true;
         try
         {
-            string? currentSelection = LogsDcFilter.SelectedItem as string;
-            List<string> servers = allResults
+            string? currentControllerSelection = LogsDcFilter.SelectedItem as string;
+            string? currentResultSelection = LogsResultFilter.SelectedItem as string;
+            string? currentSectionSelection = LogsSectionFilter.SelectedItem as string;
+            List<string> servers = logResultItems
                 .Select(result => result.Server)
                 .Where(server => !string.IsNullOrWhiteSpace(server))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(server => server, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            List<string> services = logResultItems
+                .Select(result => result.Service)
+                .Where(service => !string.IsNullOrWhiteSpace(service))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(service => service, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             LogsDcFilter.Items.Clear();
-            LogsDcFilter.Items.Add("All Controllers");
+            LogsDcFilter.Items.Add("All domain controllers");
             foreach (string server in servers)
             {
                 LogsDcFilter.Items.Add(server);
             }
 
-            string selectionToRestore = !string.IsNullOrWhiteSpace(currentSelection) && LogsDcFilter.Items.Contains(currentSelection)
-                ? currentSelection
-                : "All Controllers";
+            string controllerSelectionToRestore = !string.IsNullOrWhiteSpace(currentControllerSelection) && LogsDcFilter.Items.Contains(currentControllerSelection)
+                ? currentControllerSelection
+                : "All domain controllers";
 
-            if (!Equals(LogsDcFilter.SelectedItem, selectionToRestore))
+            if (!Equals(LogsDcFilter.SelectedItem, controllerSelectionToRestore))
             {
-                LogsDcFilter.SelectedItem = selectionToRestore;
+                LogsDcFilter.SelectedItem = controllerSelectionToRestore;
+            }
+
+            ComboBox logsResultFilter = LogsResultFilter;
+            logsResultFilter.Items.Clear();
+            logsResultFilter.Items.Add("All Results");
+            logsResultFilter.Items.Add("Failures");
+            logsResultFilter.Items.Add("Passes");
+
+            string resultSelectionToRestore = !string.IsNullOrWhiteSpace(currentResultSelection) && logsResultFilter.Items.Contains(currentResultSelection)
+                ? currentResultSelection
+                : "All Results";
+
+            if (!Equals(logsResultFilter.SelectedItem, resultSelectionToRestore))
+            {
+                logsResultFilter.SelectedItem = resultSelectionToRestore;
+            }
+
+            ComboBox logsSectionFilter = LogsSectionFilter;
+            logsSectionFilter.Items.Clear();
+            logsSectionFilter.Items.Add("All test sections");
+            foreach (string service in services)
+            {
+                logsSectionFilter.Items.Add(service);
+            }
+
+            string sectionSelectionToRestore = !string.IsNullOrWhiteSpace(currentSectionSelection) && logsSectionFilter.Items.Contains(currentSectionSelection)
+                ? currentSectionSelection
+                : "All test sections";
+
+            if (!Equals(logsSectionFilter.SelectedItem, sectionSelectionToRestore))
+            {
+                logsSectionFilter.SelectedItem = sectionSelectionToRestore;
             }
         }
         finally
@@ -3401,8 +3698,25 @@ public partial class MainWindow : Window, IDisposable
         LogsSearchBox.Text = string.Empty;
         LogsDcFilter.SelectedIndex = 0;
         LogsResultFilter.SelectedIndex = 0;
+        LogsSectionFilter.SelectedIndex = 0;
         RefreshLogsView();
         UpdateLogsWorkspaceSummary();
+    }
+
+    private async void BackToHealth_Click(object sender, RoutedEventArgs e)
+    {
+        await NavigateToSectionAsync(1).ConfigureAwait(true);
+    }
+
+    private void ShowFullLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(latestLogsFilePath) || !File.Exists(latestLogsFilePath))
+        {
+            NotificationService.Show(this, "Show Full Log", "No raw log file is available for the current view.");
+            return;
+        }
+
+        ShowLogFileInLogsTab(latestLogsFilePath);
     }
 
     private async void OpenLogFile_Click(object sender, RoutedEventArgs e)
@@ -3410,7 +3724,7 @@ public partial class MainWindow : Window, IDisposable
         string runsRoot = GetRunsRootDirectoryPath();
         if (!Directory.Exists(runsRoot))
         {
-            MessageBox.Show("No run logs directory found. Run tests first to generate logs.", "No Logs", MessageBoxButton.OK, MessageBoxImage.Information);
+            NotificationService.Show(this, "No Logs", "No run logs directory found. Run tests first to generate logs.");
             return;
         }
 
@@ -3436,25 +3750,15 @@ public partial class MainWindow : Window, IDisposable
             string content = await File.ReadAllTextAsync(filePath).ConfigureAwait(true);
             latestLogsText = content;
             latestLogsFilePath = filePath;
-            LogsListBox.ItemsSource = BuildLogLines(content);
             LogsFileNameText.Text = Path.GetFileName(filePath);
-
-            List<TestResult> parsed = ParseDCDiagOutput("External", content, filePath).ToList();
-            if (parsed.Count > 0)
-            {
-                allResults.Clear();
-                allResults.AddRange(parsed);
-                SyncResultItems();
-                RefreshLogsFilterOptions();
-                RefreshLogsView();
-            }
+            RefreshLogSectionEntries(content, filePath);
 
             logsTextPending = false;
             _ = NavigateToSectionAsync(5);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to load log file:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Error", $"Failed to load log file:\n{ex.Message}", isError: true);
         }
     }
 
@@ -3478,7 +3782,7 @@ public partial class MainWindow : Window, IDisposable
             title = Path.GetFileName(latestLogsFilePath);
         }
 
-        string logContent = latestLogsText ?? string.Empty;
+        string logContent = BuildFilteredLogText();
         if (string.IsNullOrWhiteSpace(logContent))
         {
             logContent = "No log content available. Run tests to populate the log viewer.";
@@ -3546,6 +3850,166 @@ public partial class MainWindow : Window, IDisposable
         return -1;
     }
 
+    private void RefreshVisibleLogViewer()
+    {
+        if (LogsListBox == null)
+        {
+            return;
+        }
+
+        string filteredLogText = BuildFilteredLogText();
+        IReadOnlyList<LogLine> visibleLogLines = GetCachedLogLines(filteredLogText);
+        currentVisibleLogLineCount = visibleLogLines.Count;
+        LogsListBox.ItemsSource = visibleLogLines;
+    }
+
+    private string BuildFilteredLogText()
+    {
+        string sourceText = latestLogsText ?? string.Empty;
+        string selectedController = LogsDcFilter?.SelectedItem as string ?? "All domain controllers";
+        string selectedResult = LogsResultFilter?.SelectedItem as string ?? "All Results";
+        string selectedSection = LogsSectionFilter?.SelectedItem as string ?? "All test sections";
+        string searchText = LogsSearchBox?.Text?.Trim() ?? string.Empty;
+
+        bool filterController = !selectedController.Equals("All domain controllers", StringComparison.OrdinalIgnoreCase);
+        bool filterResult = !selectedResult.Equals("All Results", StringComparison.OrdinalIgnoreCase);
+        bool filterSection = !selectedSection.Equals("All test sections", StringComparison.OrdinalIgnoreCase);
+        bool filterSearch = !string.IsNullOrWhiteSpace(searchText);
+
+        if (string.IsNullOrWhiteSpace(sourceText))
+        {
+            currentVisibleSectionCount = 0;
+            currentVisibleControllerCount = 0;
+            return string.Empty;
+        }
+
+        if (!filterController && !filterResult && !filterSection && !filterSearch)
+        {
+            currentVisibleSectionCount = logResultItems.Count;
+            currentVisibleControllerCount = logResultItems
+                .Select(result => result.Server)
+                .Where(server => !string.IsNullOrWhiteSpace(server))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            return sourceText;
+        }
+
+        List<ParsedLogSection> sections = ParseLogSections(sourceText);
+        IEnumerable<ParsedLogSection> filteredSections = sections.Where(section =>
+            (!filterController || string.Equals(section.Server, selectedController, StringComparison.OrdinalIgnoreCase)) &&
+            (!filterResult ||
+                (selectedResult.Equals("Failures", StringComparison.OrdinalIgnoreCase) && string.Equals(section.Result, "FAIL", StringComparison.OrdinalIgnoreCase)) ||
+                (selectedResult.Equals("Passes", StringComparison.OrdinalIgnoreCase) && string.Equals(section.Result, "PASS", StringComparison.OrdinalIgnoreCase))) &&
+            (!filterSection || string.Equals(section.Service, selectedSection, StringComparison.OrdinalIgnoreCase)));
+
+        StringBuilder builder = new();
+        HashSet<string> visibleControllers = new(StringComparer.OrdinalIgnoreCase);
+        int visibleSections = 0;
+
+        foreach (ParsedLogSection section in filteredSections)
+        {
+            List<string> visibleLines = filterSearch
+                ? section.Lines.Where(line => line.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0).ToList()
+                : new List<string>(section.Lines);
+
+            if (visibleLines.Count == 0)
+            {
+                continue;
+            }
+
+            visibleSections++;
+            if (!string.IsNullOrWhiteSpace(section.Server))
+            {
+                visibleControllers.Add(section.Server);
+            }
+
+            foreach (string line in visibleLines)
+            {
+                builder.AppendLine(line);
+            }
+
+            builder.AppendLine();
+        }
+
+        currentVisibleSectionCount = visibleSections;
+        currentVisibleControllerCount = visibleControllers.Count;
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private List<ParsedLogSection> ParseLogSections(string logText)
+    {
+        List<ParsedLogSection> sections = new();
+        ParsedLogSection? currentSection = null;
+        string currentServer = string.Empty;
+
+        using StringReader reader = new(logText);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            string trimmedLine = line.Trim();
+            string? parsedServer = TryParseServerFromLogLine(trimmedLine);
+            if (!string.IsNullOrWhiteSpace(parsedServer))
+            {
+                currentServer = parsedServer;
+            }
+
+            if (trimmedLine.StartsWith("Starting test:", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = new ParsedLogSection
+                {
+                    Service = trimmedLine.Replace("Starting test:", string.Empty).Trim(),
+                    Server = currentServer
+                };
+                currentSection.Lines.Add(line);
+                sections.Add(currentSection);
+                continue;
+            }
+
+            if (currentSection == null)
+            {
+                continue;
+            }
+
+            string? resultServer = TryExtractControllerFromResultLine(trimmedLine);
+            if (!string.IsNullOrWhiteSpace(resultServer) &&
+                string.IsNullOrWhiteSpace(currentSection.Server))
+            {
+                currentSection.Server = resultServer;
+            }
+
+            if (trimmedLine.Contains("failed", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection.Result = "FAIL";
+            }
+            else if (trimmedLine.Contains("passed", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection.Result = "PASS";
+            }
+
+            currentSection.Lines.Add(line);
+        }
+
+        for (int i = 0; i < sections.Count; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(sections[i].Server))
+            {
+                continue;
+            }
+
+            string? inferredServer = sections[i].Lines
+                .Select(logLine => TryExtractControllerFromResultLine(logLine.Trim()) ?? TryParseServerFromLogLine(logLine.Trim()))
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+            if (!string.IsNullOrWhiteSpace(inferredServer))
+            {
+                sections[i].Server = inferredServer;
+            }
+        }
+
+        return sections;
+    }
+
     private string BuildPrivilegeInsightSummary()
     {
         if (latestInventory.PrivilegedGroupCounts.Count == 0)
@@ -3585,32 +4049,120 @@ public partial class MainWindow : Window, IDisposable
     private IEnumerable<TestResult> ParseDCDiagOutput(string server, string output, string logFilePath)
     {
         List<TestResult> results = new();
+        string currentServer = server;
         TestResult? lastTestResult = null;
         using StringReader reader = new(output);
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            if (line.Contains("Starting test:"))
+            string trimmedLine = line.Trim();
+            string? parsedServer = TryParseServerFromLogLine(trimmedLine);
+            if (!string.IsNullOrWhiteSpace(parsedServer))
             {
-                string testName = line.Replace("Starting test:", string.Empty).Trim();
+                currentServer = parsedServer;
+            }
+
+            if (trimmedLine.Contains("Starting test:", StringComparison.OrdinalIgnoreCase))
+            {
+                string testName = trimmedLine.Replace("Starting test:", string.Empty).Trim();
                 lastTestResult = new TestResult
                 {
                     Service = testName,
-                    Server = server,
+                    Server = currentServer,
                     Result = "In Progress",
                     Message = "Awaiting result...",
                     LogFilePath = logFilePath
                 };
                 results.Add(lastTestResult);
             }
-            else if ((line.Contains("failed") || line.Contains("passed")) && lastTestResult != null)
+            else if ((trimmedLine.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                      trimmedLine.Contains("passed", StringComparison.OrdinalIgnoreCase)) &&
+                     lastTestResult != null)
             {
-                lastTestResult.Result = line.Contains("failed") ? "FAIL" : "PASS";
-                lastTestResult.Message = line.Trim();
+                string effectiveServer = TryExtractControllerFromResultLine(trimmedLine) ?? currentServer;
+                lastTestResult.Server = effectiveServer;
+                lastTestResult.Result = trimmedLine.Contains("failed", StringComparison.OrdinalIgnoreCase) ? "FAIL" : "PASS";
+                lastTestResult.Message = trimmedLine;
             }
         }
 
-        return results;
+        return results
+            .Where(result => !string.Equals(result.Result, "In Progress", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(result => BuildTestResultKey(result), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    private static string BuildTestResultKey(TestResult result)
+    {
+        return string.Join("|",
+            result.Service ?? string.Empty,
+            result.Server ?? string.Empty,
+            result.Result ?? string.Empty,
+            result.Message ?? string.Empty,
+            result.LogFilePath ?? string.Empty);
+    }
+
+    private static string? TryParseServerFromLogLine(string line)
+    {
+        if (line.StartsWith("---- Results for DC:", StringComparison.OrdinalIgnoreCase))
+        {
+            string value = line
+                .Replace("---- Results for DC:", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("----", string.Empty)
+                .Trim();
+
+            return NormalizeControllerName(value);
+        }
+
+        if (line.StartsWith("Command:", StringComparison.OrdinalIgnoreCase))
+        {
+            int serverSwitchIndex = line.IndexOf("/s:", StringComparison.OrdinalIgnoreCase);
+            if (serverSwitchIndex >= 0)
+            {
+                string remainder = line[(serverSwitchIndex + 3)..].Trim();
+                int endIndex = remainder.IndexOfAny([' ', '/', '\\', '\t']);
+                string candidate = endIndex >= 0 ? remainder[..endIndex] : remainder;
+                return NormalizeControllerName(candidate);
+            }
+        }
+
+        return null;
+    }
+
+    private static string? TryExtractControllerFromResultLine(string line)
+    {
+        string[] tokens = line
+            .Split([' ', '\t', ',', ';', ':'], StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (string token in tokens)
+        {
+            if (token.EndsWith("$", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (token.Any(char.IsDigit) &&
+                token.Any(char.IsLetter) &&
+                !token.Contains(".", StringComparison.OrdinalIgnoreCase) &&
+                token.Length >= 4)
+            {
+                return NormalizeControllerName(token);
+            }
+        }
+
+        return null;
+    }
+
+    private static string NormalizeControllerName(string value)
+    {
+        string normalized = value.Trim();
+        if (normalized.EndsWith("_TestResults", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized[..^"_TestResults".Length];
+        }
+
+        return normalized.Trim();
     }
 
     private async Task<string> RunCommandAsync(string command, string logFilePath, CancellationToken token)
@@ -3667,6 +4219,40 @@ public partial class MainWindow : Window, IDisposable
                 System.Threading.Thread.Sleep(delayMs);
             }
         }
+    }
+
+    private void dgFindings_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (dgFindings?.SelectedItem is not AdHealthFinding finding)
+        {
+            FindingDetailsText.Text = "Select a finding to see the full explanation, evidence, and next action.";
+            UpdateActionButtonStates();
+            return;
+        }
+
+        FindingDetailsText.Text =
+            $"{finding.Summary}{Environment.NewLine}{Environment.NewLine}" +
+            $"Category: {finding.Category}{Environment.NewLine}" +
+            $"Severity: {finding.Severity}{Environment.NewLine}" +
+            $"Target: {finding.Target}{Environment.NewLine}" +
+            $"Source: {finding.Source}{Environment.NewLine}" +
+            $"Status: {finding.Status}{Environment.NewLine}{Environment.NewLine}" +
+            $"Evidence: {finding.Evidence}{Environment.NewLine}{Environment.NewLine}" +
+            $"Recommended action: {finding.Remediation}";
+        UpdateActionButtonStates();
+    }
+
+    private void OpenFindingLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (dgFindings?.SelectedItem is not AdHealthFinding finding ||
+            string.IsNullOrWhiteSpace(finding.LogFilePath) ||
+            !File.Exists(finding.LogFilePath))
+        {
+            NotificationService.Show(this, "Open Related Log", "The selected finding does not have an associated log file.");
+            return;
+        }
+
+        ShowLogFileInLogsTab(finding.LogFilePath);
     }
 
     private async Task<List<TestResult>> RunDnsCheckAsync(string dc, string logFilePath, CancellationToken token)
@@ -3765,17 +4351,33 @@ public partial class MainWindow : Window, IDisposable
     {
         try
         {
-            var selected = testResultsGrid.SelectedItems.Cast<TestResult>().ToList();
+            List<TestResult> selected = testResultsGrid.SelectedItems.OfType<TestResult>().ToList();
             if (selected.Count == 0)
             {
-            new SuccessNotification("No Selection", "No results selected. Check the checkbox(es) to select result(s) to view.", isError: true).ShowDialog();
+                new SuccessNotification("No Selection", "No results selected. Check the checkbox(es) to select result(s) to view.", isError: true).ShowDialog();
                 return;
             }
 
-            var validResults = selected.Where(r => !string.IsNullOrWhiteSpace(r.LogFilePath) && File.Exists(r.LogFilePath)).ToList();
+            List<TestResult> validResults = selected.Where(r => !string.IsNullOrWhiteSpace(r.LogFilePath) && File.Exists(r.LogFilePath)).ToList();
             if (validResults.Count == 0)
             {
-                MessageBox.Show("No log files found for the selected results.", "Log Not Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+                NotificationService.Show(this, "Log Not Found", "No log files found for the selected results.", isError: true);
+                return;
+            }
+
+            List<string> uniqueLogFiles = validResults
+                .Select(result => result.LogFilePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (uniqueLogFiles.Count > 1)
+            {
+                latestLogsText = BuildMergedLogText(uniqueLogFiles);
+                latestLogsFilePath = uniqueLogFiles[0];
+                RefreshLogSectionEntries(latestLogsText, latestLogsFilePath);
+                LogsFileNameText.Text = $"Combined full logs from {uniqueLogFiles.Count} files";
+                logsTextPending = false;
+                _ = NavigateToSectionAsync(5);
                 return;
             }
 
@@ -3787,11 +4389,10 @@ public partial class MainWindow : Window, IDisposable
                 string key = $"{result.LogFilePath}|{result.Service ?? ""}";
                 if (!processedFiles.Add(key)) continue;
 
-                string[] logLines = File.ReadAllLines(result.LogFilePath);
                 List<string> section = new();
                 bool capture = false;
 
-                foreach (string line in logLines)
+                foreach (string line in File.ReadLines(result.LogFilePath))
                 {
                     if (!capture)
                     {
@@ -3823,14 +4424,14 @@ public partial class MainWindow : Window, IDisposable
 
             if (extractedSections.Count == 0)
             {
-                MessageBox.Show("Could not extract any log sections for the selected results.", "Log Not Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+                NotificationService.Show(this, "Log Not Found", "Could not extract any log sections for the selected results.", isError: true);
                 return;
             }
 
             string combinedText = string.Join("\r\n", extractedSections);
             latestLogsText = combinedText;
             latestLogsFilePath = validResults[0].LogFilePath;
-            LogsListBox.ItemsSource = BuildLogLines(combinedText);
+            RefreshLogSectionEntries(combinedText, latestLogsFilePath);
             string fileSources = string.Join(", ", validResults
                 .Select(r => Path.GetFileName(r.LogFilePath))
                 .Distinct(StringComparer.OrdinalIgnoreCase));
@@ -3844,8 +4445,25 @@ public partial class MainWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error loading log: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Error", $"Error loading log: {ex.Message}", isError: true);
         }
+    }
+
+    private static string BuildMergedLogText(IEnumerable<string> logFilePaths)
+    {
+        StringBuilder builder = new();
+        foreach (string logFilePath in logFilePaths)
+        {
+            builder.AppendLine($"--- {Path.GetFileName(logFilePath)} ---");
+            foreach (string line in File.ReadLines(logFilePath))
+            {
+                builder.AppendLine(line);
+            }
+
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
     }
 
     public void Dispose()
@@ -3856,6 +4474,10 @@ public partial class MainWindow : Window, IDisposable
         dashboardRefreshTimer.Tick -= DashboardRefreshTimer_Tick;
         cancellationTokenSource?.Cancel();
         cancellationTokenSource?.Dispose();
+        scheduledLogCache.Clear();
+        cachedLogLines = Array.Empty<LogLine>();
+        cachedLogLinesSource = string.Empty;
+        latestLogsText = string.Empty;
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -3910,7 +4532,16 @@ public partial class MainWindow : Window, IDisposable
         try
         {
             string toAddress = recipientEmail;
-            MailMessage mail = new("ADGuardian@funasset.com", toAddress)
+            string fingerprint = string.Join("|", toAddress, subject, attachmentPath ?? string.Empty, bodyDetail ?? string.Empty);
+            DateTime nowUtc = DateTime.UtcNow;
+            if (string.Equals(lastEmailFingerprint, fingerprint, StringComparison.Ordinal) &&
+                (nowUtc - lastEmailSentUtc) < TimeSpan.FromSeconds(30))
+            {
+                Debug.WriteLine("Duplicate email send suppressed.");
+                return;
+            }
+
+            using MailMessage mail = new("ADGuardian@funasset.com", toAddress)
             {
                 Subject = subject,
                 IsBodyHtml = true
@@ -3992,13 +4623,15 @@ public partial class MainWindow : Window, IDisposable
                 mail.Attachments.Add(new Attachment(attachmentPath));
             }
 
-            SmtpClient client = new("smtp.gmail.com", 587)
+            using SmtpClient client = new("smtp.gmail.com", 587)
             {
                 Credentials = new NetworkCredential("adguardianutility@gmail.com", "ihai btfi qeja nbqp"),
                 EnableSsl = true,
                 Timeout = (int)ScheduledEmailTimeout.TotalMilliseconds
             };
             client.Send(mail);
+            lastEmailFingerprint = fingerprint;
+            lastEmailSentUtc = nowUtc;
         }
         catch (Exception ex)
         {
@@ -4008,7 +4641,7 @@ public partial class MainWindow : Window, IDisposable
             }
             else
             {
-                MessageBox.Show("Failed to send email: " + ex.Message, "Email Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotificationService.Show(this, "Email Error", "Failed to send email: " + ex.Message, isError: true);
             }
         }
     }

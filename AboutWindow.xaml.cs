@@ -8,11 +8,14 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Navigation;
+using AdHealthMonitor;
 
 namespace Domain_Guardian;
 
 public partial class AboutWindow : Window
 {
+    private bool updateCheckInProgress;
+
     public class GitHubRelease
     {
         public string tag_name { get; set; } = string.Empty;
@@ -47,7 +50,25 @@ public partial class AboutWindow : Window
 
     private async void ManualUpdateButton_Click(object sender, RoutedEventArgs e)
     {
+        if (updateCheckInProgress)
+        {
+            return;
+        }
+
+        updateCheckInProgress = true;
+        if (sender is FrameworkElement element)
+        {
+            element.IsEnabled = false;
+        }
+
         await AutoUpdateAsync();
+
+        if (sender is FrameworkElement trigger)
+        {
+            trigger.IsEnabled = true;
+        }
+
+        updateCheckInProgress = false;
     }
 
     private async Task AutoUpdateAsync()
@@ -71,16 +92,20 @@ public partial class AboutWindow : Window
 
             if (release?.tag_name == null)
             {
-                MessageBox.Show("Could not retrieve update information.", "Update Check", MessageBoxButton.OK, MessageBoxImage.Information);
+                NotificationService.Show(this, "Update Check", "Could not retrieve update information.");
                 return;
             }
 
-            Version latestVersion = new(release.tag_name.TrimStart('v'));
-            Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
+            if (!TryParseReleaseVersion(release.tag_name, out Version latestVersion))
+            {
+                NotificationService.Show(this, "Update Error", $"The latest release tag '{release.tag_name}' could not be understood.", isError: true);
+                return;
+            }
+
+            Version currentVersion = GetCurrentAppVersion();
             if (latestVersion <= currentVersion)
             {
-                MessageBox.Show($"You are up to date (v{currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}).",
-                    "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                NotificationService.Show(this, "No Updates", $"You are already on the latest version (v{currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}).");
                 return;
             }
 
@@ -91,11 +116,10 @@ public partial class AboutWindow : Window
             if (result != true)
                 return;
 
-            GitHubAsset? asset = release.assets.FirstOrDefault(a =>
-                a.browser_download_url.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
+            GitHubAsset? asset = SelectInstallerAsset(release.assets);
             if (asset == null)
             {
-                MessageBox.Show("No suitable update asset found.", "Update Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotificationService.Show(this, "Update Error", "No suitable update asset found.", isError: true);
                 return;
             }
 
@@ -108,13 +132,99 @@ public partial class AboutWindow : Window
             }
 
             Process.Start(new ProcessStartInfo(tempFile) { UseShellExecute = true });
-            MessageBox.Show("The application will now update and restart.", "Updating", MessageBoxButton.OK, MessageBoxImage.Information);
+            NotificationService.Show(this, "Updating", "The application will now update and restart.");
             Application.Current.Shutdown();
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Error checking for updates: " + ex.Message, "Update Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Update Error", "Error checking for updates: " + ex.Message, isError: true);
         }
+    }
+
+    private static Version GetCurrentAppVersion()
+    {
+        Version assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
+        string informationalVersion = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion ?? string.Empty;
+
+        return TryParseReleaseVersion(informationalVersion, out Version parsedInformationalVersion)
+            ? parsedInformationalVersion
+            : new Version(assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build);
+    }
+
+    private static bool TryParseReleaseVersion(string rawVersion, out Version version)
+    {
+        version = new Version(0, 0, 0);
+        if (string.IsNullOrWhiteSpace(rawVersion))
+        {
+            return false;
+        }
+
+        string normalized = rawVersion.Trim();
+        if (normalized.StartsWith('v'))
+        {
+            normalized = normalized[1..];
+        }
+
+        int separatorIndex = normalized.IndexOfAny(['-', '+', ' ']);
+        if (separatorIndex >= 0)
+        {
+            normalized = normalized[..separatorIndex];
+        }
+
+        if (Version.TryParse(normalized, out Version? parsedVersion) && parsedVersion != null)
+        {
+            version = parsedVersion;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static GitHubAsset? SelectInstallerAsset(GitHubAsset[] assets)
+    {
+        if (assets == null || assets.Length == 0)
+        {
+            return null;
+        }
+
+        string[] preferredNames =
+        {
+            "AD Guardian Installer.exe",
+            "ADGuardianInstaller.exe",
+            "Setup.exe"
+        };
+
+        foreach (string preferredName in preferredNames)
+        {
+            GitHubAsset? exactMatch = assets.FirstOrDefault(asset =>
+                asset.name.Equals(preferredName, StringComparison.OrdinalIgnoreCase));
+            if (exactMatch != null)
+            {
+                return exactMatch;
+            }
+        }
+
+        GitHubAsset? exeInstaller = assets.FirstOrDefault(asset =>
+            asset.name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+            (asset.name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
+             asset.name.Contains("setup", StringComparison.OrdinalIgnoreCase)));
+        if (exeInstaller != null)
+        {
+            return exeInstaller;
+        }
+
+        GitHubAsset? msiInstaller = assets.FirstOrDefault(asset =>
+            asset.name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
+        if (msiInstaller != null)
+        {
+            return msiInstaller;
+        }
+
+        return assets.FirstOrDefault(asset =>
+            asset.browser_download_url.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+            asset.browser_download_url.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

@@ -12,7 +12,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\AD Guardian
+DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName=AD Guardian
 AllowNoIcons=yes
 OutputDir={#InstallerOutputDir}
@@ -55,3 +55,165 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Parameters: "-initialize-state"; Flags: runhidden waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; Flags: postinstall skipifsilent shellexec unchecked
+
+[Code]
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\ADGuardian_is1';
+
+var
+  ExistingInstallDetected: Boolean;
+  ExistingInstallPath: string;
+  ExistingInstallUninstallString: string;
+  ExistingInstallPage: TWizardPage;
+  RepairRadio: TNewRadioButton;
+  UninstallRadio: TNewRadioButton;
+  ExistingInstallCaption: TNewStaticText;
+
+function GetDefaultInstallDir(Param: string): string;
+begin
+  if ExistingInstallDetected and (ExistingInstallPath <> '') then
+    Result := ExistingInstallPath
+  else
+    Result := ExpandConstant('{autopf}\AD Guardian');
+end;
+
+procedure SplitCommandLine(const CommandLine: string; var FileName, Params: string);
+var
+  I: Integer;
+begin
+  FileName := '';
+  Params := '';
+
+  if CommandLine = '' then
+    Exit;
+
+  if CommandLine[1] = '"' then
+  begin
+    I := 2;
+    while (I <= Length(CommandLine)) and (CommandLine[I] <> '"') do
+      Inc(I);
+
+    FileName := Copy(CommandLine, 2, I - 2);
+    Params := Trim(Copy(CommandLine, I + 1, Length(CommandLine)));
+  end
+  else
+  begin
+    I := 1;
+    while (I <= Length(CommandLine)) and (CommandLine[I] <> ' ') do
+      Inc(I);
+
+    FileName := Copy(CommandLine, 1, I - 1);
+    Params := Trim(Copy(CommandLine, I + 1, Length(CommandLine)));
+  end;
+end;
+
+function TryReadExistingInstall(var InstallPath: string; var UninstallString: string): Boolean;
+var
+  Value: string;
+  ExePath: string;
+  Params: string;
+begin
+  Result := False;
+  InstallPath := '';
+  UninstallString := '';
+
+  if RegQueryStringValue(HKLM64, UninstallKey, 'UninstallString', Value) or
+     RegQueryStringValue(HKLM32, UninstallKey, 'UninstallString', Value) or
+     RegQueryStringValue(HKCU, UninstallKey, 'UninstallString', Value) then
+  begin
+    UninstallString := Value;
+    SplitCommandLine(Value, ExePath, Params);
+    if ExePath <> '' then
+      InstallPath := ExtractFileDir(ExePath);
+    Result := True;
+    Exit;
+  end;
+
+  if RegQueryStringValue(HKLM64, UninstallKey, 'InstallLocation', Value) or
+     RegQueryStringValue(HKLM32, UninstallKey, 'InstallLocation', Value) or
+     RegQueryStringValue(HKCU, UninstallKey, 'InstallLocation', Value) then
+  begin
+    InstallPath := Value;
+    Result := True;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  ExistingInstallDetected := TryReadExistingInstall(ExistingInstallPath, ExistingInstallUninstallString);
+  Result := True;
+end;
+
+procedure LaunchUninstallerAndExit;
+var
+  UninstallExe: string;
+  UninstallParams: string;
+  ResultCode: Integer;
+begin
+  SplitCommandLine(ExistingInstallUninstallString, UninstallExe, UninstallParams);
+  if UninstallExe = '' then
+  begin
+    MsgBox('The existing installation was detected, but its uninstall command could not be read.', mbError, MB_OK);
+    Exit;
+  end;
+
+  if not Exec(UninstallExe, UninstallParams, '', SW_SHOW, ewNoWait, ResultCode) then
+  begin
+    MsgBox('Unable to start the existing uninstaller.', mbError, MB_OK);
+    Exit;
+  end;
+
+  WizardForm.Close;
+end;
+
+procedure InitializeWizard();
+begin
+  if not ExistingInstallDetected then
+    Exit;
+
+  ExistingInstallPage := CreateCustomPage(wpWelcome, 'Existing Installation Detected', 'Choose how to proceed with the current AD Guardian installation.');
+
+  ExistingInstallCaption := TNewStaticText.Create(ExistingInstallPage.Surface);
+  ExistingInstallCaption.Parent := ExistingInstallPage.Surface;
+  ExistingInstallCaption.Left := ScaleX(0);
+  ExistingInstallCaption.Top := ScaleY(0);
+  ExistingInstallCaption.Width := ExistingInstallPage.SurfaceWidth;
+  ExistingInstallCaption.Caption := 'An existing installation was detected at:';
+
+  with TNewStaticText.Create(ExistingInstallPage.Surface) do
+  begin
+    Parent := ExistingInstallPage.Surface;
+    Left := ScaleX(0);
+    Top := ScaleY(18);
+    Width := ExistingInstallPage.SurfaceWidth;
+    Caption := ExistingInstallPath;
+  end;
+
+  RepairRadio := TNewRadioButton.Create(ExistingInstallPage.Surface);
+  RepairRadio.Parent := ExistingInstallPage.Surface;
+  RepairRadio.Left := ScaleX(0);
+  RepairRadio.Top := ScaleY(52);
+  RepairRadio.Width := ExistingInstallPage.SurfaceWidth;
+  RepairRadio.Caption := 'Repair / reinstall the current installation';
+  RepairRadio.Checked := True;
+
+  UninstallRadio := TNewRadioButton.Create(ExistingInstallPage.Surface);
+  UninstallRadio.Parent := ExistingInstallPage.Surface;
+  UninstallRadio.Left := ScaleX(0);
+  UninstallRadio.Top := ScaleY(76);
+  UninstallRadio.Width := ExistingInstallPage.SurfaceWidth;
+  UninstallRadio.Caption := 'Uninstall the existing installation and exit';
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (ExistingInstallPage <> nil) and (CurPageID = ExistingInstallPage.ID) then
+  begin
+    if UninstallRadio.Checked then
+    begin
+      Result := False;
+      LaunchUninstallerAndExit;
+    end;
+  end;
+end;

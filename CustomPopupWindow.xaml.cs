@@ -58,7 +58,7 @@ public partial class CustomPopupWindow : Window
     {
         if (string.IsNullOrWhiteSpace(LogFilePath) || !File.Exists(LogFilePath))
         {
-            MessageBox.Show("Log file not found.", "View Log", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "View Log", "Log file not found.", isError: true);
             return;
         }
 

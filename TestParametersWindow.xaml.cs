@@ -76,7 +76,7 @@ public partial class TestParametersWindow : Window
         settings.TestSmbLdapSigning = TestSmbLdapSigning;
         appStateStore.SaveSettings(settings);
 
-        MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+        NotificationService.Show(this, "Success", "Settings saved successfully!");
         DialogResult = true;
         Close();
     }
@@ -94,7 +94,7 @@ public partial class TestParametersWindow : Window
         string recipient = emailTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(recipient))
         {
-            MessageBox.Show("Please enter a recipient email address first.", "Email Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+            NotificationService.Show(this, "Email Required", "Please enter a recipient email address first.", isError: true);
             return;
         }
 
@@ -119,11 +119,11 @@ public partial class TestParametersWindow : Window
                     client.Send(message);
                 }));
 
-            MessageBox.Show("Test email sent successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            NotificationService.Show(this, "Success", "Test email sent successfully!");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to send test email:\n{ex.Message}", "Send Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            NotificationService.Show(this, "Send Failed", $"Failed to send test email:\n{ex.Message}", isError: true);
         }
         finally
         {
