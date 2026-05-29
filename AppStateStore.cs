@@ -16,6 +16,8 @@ public sealed class AppStateStore
     private const string SettingsRowId = "settings";
     private const string SchedulerTasksRowId = "schedulerTasks";
     private const string LegacyMigrationRowId = "legacyMigration";
+    private static readonly object InitializationLock = new();
+    private static readonly HashSet<string> InitializedDatabasePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly string databasePath;
     private readonly string legacyHistoryPath;
     private readonly string legacySnapshotPath;
@@ -41,59 +43,71 @@ public sealed class AppStateStore
 
     public void Initialize()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-
-        using SqliteConnection connection = CreateConnection();
-        connection.Open();
-        ConfigureConnection(connection, configureJournalMode: true);
-
-        ExecuteNonQuery(connection, """
-            CREATE TABLE IF NOT EXISTS TestHistory (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                RunDateTicks INTEGER NOT NULL,
-                Total INTEGER NOT NULL,
-                Passed INTEGER NOT NULL,
-                Failed INTEGER NOT NULL,
-                Details TEXT NOT NULL,
-                LogFilePath TEXT NOT NULL,
-                TestType TEXT NOT NULL
-            );
-            """);
-
-        ExecuteNonQuery(connection, """
-            CREATE INDEX IF NOT EXISTS IX_TestHistory_RunDateTicks
-            ON TestHistory (RunDateTicks DESC);
-            """);
-
-        ExecuteNonQuery(connection, """
-            CREATE TABLE IF NOT EXISTS DashboardSnapshot (
-                Id TEXT PRIMARY KEY,
-                CapturedAtTicks INTEGER NOT NULL,
-                JsonPayload TEXT NOT NULL
-            );
-            """);
-
-        ExecuteNonQuery(connection, """
-            CREATE TABLE IF NOT EXISTS AppDocuments (
-                Id TEXT PRIMARY KEY,
-                UpdatedAtTicks INTEGER NOT NULL,
-                JsonPayload TEXT NOT NULL
-            );
-            """);
-
-        if (!HasDocument(connection, LegacyMigrationRowId))
+        string normalizedDatabasePath = Path.GetFullPath(databasePath);
+        lock (InitializationLock)
         {
-            ImportLegacyHistoryIfNeeded(connection);
-            ImportLegacySnapshotIfNeeded(connection);
-            ImportLegacySettingsIfNeeded(connection);
-            ImportLegacySchedulerTasksIfNeeded(connection);
-            ArchiveLegacyStateFiles(connection);
-            SaveDocument(connection, LegacyMigrationRowId, new { CompletedAtUtc = DateTime.UtcNow });
+            if (InitializedDatabasePaths.Contains(normalizedDatabasePath))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(normalizedDatabasePath)!);
+
+            using SqliteConnection connection = CreateConnection();
+            connection.Open();
+            ConfigureConnection(connection, configureJournalMode: true);
+
+            ExecuteNonQuery(connection, """
+                CREATE TABLE IF NOT EXISTS TestHistory (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    RunDateTicks INTEGER NOT NULL,
+                    Total INTEGER NOT NULL,
+                    Passed INTEGER NOT NULL,
+                    Failed INTEGER NOT NULL,
+                    Details TEXT NOT NULL,
+                    LogFilePath TEXT NOT NULL,
+                    TestType TEXT NOT NULL
+                );
+                """);
+
+            ExecuteNonQuery(connection, """
+                CREATE INDEX IF NOT EXISTS IX_TestHistory_RunDateTicks
+                ON TestHistory (RunDateTicks DESC);
+                """);
+
+            ExecuteNonQuery(connection, """
+                CREATE TABLE IF NOT EXISTS DashboardSnapshot (
+                    Id TEXT PRIMARY KEY,
+                    CapturedAtTicks INTEGER NOT NULL,
+                    JsonPayload TEXT NOT NULL
+                );
+                """);
+
+            ExecuteNonQuery(connection, """
+                CREATE TABLE IF NOT EXISTS AppDocuments (
+                    Id TEXT PRIMARY KEY,
+                    UpdatedAtTicks INTEGER NOT NULL,
+                    JsonPayload TEXT NOT NULL
+                );
+                """);
+
+            if (!HasDocument(connection, LegacyMigrationRowId))
+            {
+                ImportLegacyHistoryIfNeeded(connection);
+                ImportLegacySnapshotIfNeeded(connection);
+                ImportLegacySettingsIfNeeded(connection);
+                ImportLegacySchedulerTasksIfNeeded(connection);
+                ArchiveLegacyStateFiles(connection);
+                SaveDocument(connection, LegacyMigrationRowId, new { CompletedAtUtc = DateTime.UtcNow });
+            }
+
+            InitializedDatabasePaths.Add(normalizedDatabasePath);
         }
     }
 
     public AppStartupState LoadStartupState()
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -107,6 +121,7 @@ public sealed class AppStateStore
 
     public List<TestHistoryEntry> LoadHistory()
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -145,6 +160,7 @@ public sealed class AppStateStore
 
     public void SaveHistory(IReadOnlyCollection<TestHistoryEntry> entries)
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -184,6 +200,7 @@ public sealed class AppStateStore
 
     public DashboardSnapshot? LoadDashboardSnapshot()
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -214,6 +231,7 @@ public sealed class AppStateStore
 
     public void SaveDashboardSnapshot(DashboardSnapshot snapshot)
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -240,6 +258,7 @@ public sealed class AppStateStore
 
     public PersistedAppSettings LoadSettings()
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -253,6 +272,7 @@ public sealed class AppStateStore
 
     public List<ScheduledTask> LoadScheduledTasks()
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -393,6 +413,7 @@ public sealed class AppStateStore
 
     private T? LoadDocument<T>(string id) where T : class
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
@@ -423,6 +444,7 @@ public sealed class AppStateStore
 
     private void SaveDocument<T>(string id, T document)
     {
+        Initialize();
         using SqliteConnection connection = CreateConnection();
         connection.Open();
         ConfigureConnection(connection);
