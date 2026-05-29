@@ -519,14 +519,9 @@ public partial class MainWindow : Window, IDisposable
         {
             await Task.Run(appStateStore.Initialize).ConfigureAwait(true);
 
-            Task<PersistedAppSettings> settingsTask = Task.Run(appStateStore.LoadSettings);
-            Task<DashboardSnapshot?> snapshotTask = Task.Run(appStateStore.LoadDashboardSnapshot);
-            Task<List<TestHistoryEntry>> historyTask = Task.Run(appStateStore.LoadHistory);
-            Task<List<ScheduledTask>> schedulerTask = Task.Run(appStateStore.LoadScheduledTasks);
+            AppStartupState startupState = await Task.Run(appStateStore.LoadStartupState).ConfigureAwait(true);
 
-            await Task.WhenAll(settingsTask, snapshotTask, historyTask, schedulerTask).ConfigureAwait(true);
-
-            PersistedAppSettings settings = settingsTask.Result;
+            PersistedAppSettings settings = startupState.Settings;
             domainControllers = settings.DomainControllers;
             recipientEmail = settings.RecipientEmail;
             testDnsCheck = settings.TestDnsCheck;
@@ -538,12 +533,12 @@ public partial class MainWindow : Window, IDisposable
             sendEmailManual = settings.SendEmailManual;
             sendEmailScheduled = settings.SendEmailScheduled;
 
-            cachedDashboardSnapshot = snapshotTask.Result;
-            historyEntries = historyTask.Result
+            cachedDashboardSnapshot = startupState.DashboardSnapshot;
+            historyEntries = startupState.History
                 .OrderByDescending(x => x.RunDate)
                 .ToList();
             SyncHistoryItems(historyEntries);
-            ReplaceScheduledTasks(schedulerTask.Result);
+            ReplaceScheduledTasks(startupState.ScheduledTasks);
             schedulerTasksLoaded = true;
 
             if (MainTabControl.SelectedIndex == 7)

@@ -15,6 +15,7 @@ public sealed class AppStateStore
     private const string SnapshotRowId = "dashboard";
     private const string SettingsRowId = "settings";
     private const string SchedulerTasksRowId = "schedulerTasks";
+    private const string LegacyMigrationRowId = "legacyMigration";
     private readonly string databasePath;
     private readonly string legacyHistoryPath;
     private readonly string legacySnapshotPath;
@@ -44,6 +45,7 @@ public sealed class AppStateStore
 
         using SqliteConnection connection = CreateConnection();
         connection.Open();
+        ConfigureConnection(connection, configureJournalMode: true);
 
         ExecuteNonQuery(connection, """
             CREATE TABLE IF NOT EXISTS TestHistory (
@@ -79,18 +81,41 @@ public sealed class AppStateStore
             );
             """);
 
-        ImportLegacyHistoryIfNeeded(connection);
-        ImportLegacySnapshotIfNeeded(connection);
-        ImportLegacySettingsIfNeeded(connection);
-        ImportLegacySchedulerTasksIfNeeded(connection);
+        if (!HasDocument(connection, LegacyMigrationRowId))
+        {
+            ImportLegacyHistoryIfNeeded(connection);
+            ImportLegacySnapshotIfNeeded(connection);
+            ImportLegacySettingsIfNeeded(connection);
+            ImportLegacySchedulerTasksIfNeeded(connection);
+            ArchiveLegacyStateFiles(connection);
+            SaveDocument(connection, LegacyMigrationRowId, new { CompletedAtUtc = DateTime.UtcNow });
+        }
+    }
 
-        ArchiveLegacyStateFiles(connection);
+    public AppStartupState LoadStartupState()
+    {
+        using SqliteConnection connection = CreateConnection();
+        connection.Open();
+        ConfigureConnection(connection);
+
+        return new AppStartupState(
+            LoadDocument<PersistedAppSettings>(connection, SettingsRowId) ?? new PersistedAppSettings(),
+            LoadDashboardSnapshot(connection),
+            LoadHistory(connection),
+            LoadDocument<List<ScheduledTask>>(connection, SchedulerTasksRowId) ?? new List<ScheduledTask>());
     }
 
     public List<TestHistoryEntry> LoadHistory()
     {
         using SqliteConnection connection = CreateConnection();
         connection.Open();
+        ConfigureConnection(connection);
+
+        return LoadHistory(connection);
+    }
+
+    private static List<TestHistoryEntry> LoadHistory(SqliteConnection connection)
+    {
 
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
@@ -122,8 +147,15 @@ public sealed class AppStateStore
     {
         using SqliteConnection connection = CreateConnection();
         connection.Open();
+        ConfigureConnection(connection);
         using SqliteTransaction transaction = connection.BeginTransaction();
 
+        SaveHistory(connection, transaction, entries);
+        transaction.Commit();
+    }
+
+    private static void SaveHistory(SqliteConnection connection, SqliteTransaction transaction, IReadOnlyCollection<TestHistoryEntry> entries)
+    {
         using (SqliteCommand deleteCommand = connection.CreateCommand())
         {
             deleteCommand.Transaction = transaction;
@@ -148,14 +180,19 @@ public sealed class AppStateStore
             insertCommand.Parameters.AddWithValue("$testType", entry.TestType ?? string.Empty);
             insertCommand.ExecuteNonQuery();
         }
-
-        transaction.Commit();
     }
 
     public DashboardSnapshot? LoadDashboardSnapshot()
     {
         using SqliteConnection connection = CreateConnection();
         connection.Open();
+        ConfigureConnection(connection);
+
+        return LoadDashboardSnapshot(connection);
+    }
+
+    private static DashboardSnapshot? LoadDashboardSnapshot(SqliteConnection connection)
+    {
 
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
@@ -177,11 +214,16 @@ public sealed class AppStateStore
 
     public void SaveDashboardSnapshot(DashboardSnapshot snapshot)
     {
-        string payload = JsonConvert.SerializeObject(snapshot, Formatting.None);
-
         using SqliteConnection connection = CreateConnection();
         connection.Open();
+        ConfigureConnection(connection);
 
+        SaveDashboardSnapshot(connection, snapshot);
+    }
+
+    private static void SaveDashboardSnapshot(SqliteConnection connection, DashboardSnapshot snapshot)
+    {
+        string payload = JsonConvert.SerializeObject(snapshot, Formatting.None);
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO DashboardSnapshot (Id, CapturedAtTicks, JsonPayload)
@@ -198,7 +240,10 @@ public sealed class AppStateStore
 
     public PersistedAppSettings LoadSettings()
     {
-        return LoadDocument<PersistedAppSettings>(SettingsRowId) ?? new PersistedAppSettings();
+        using SqliteConnection connection = CreateConnection();
+        connection.Open();
+        ConfigureConnection(connection);
+        return LoadDocument<PersistedAppSettings>(connection, SettingsRowId) ?? new PersistedAppSettings();
     }
 
     public void SaveSettings(PersistedAppSettings settings)
@@ -208,7 +253,10 @@ public sealed class AppStateStore
 
     public List<ScheduledTask> LoadScheduledTasks()
     {
-        return LoadDocument<List<ScheduledTask>>(SchedulerTasksRowId) ?? new List<ScheduledTask>();
+        using SqliteConnection connection = CreateConnection();
+        connection.Open();
+        ConfigureConnection(connection);
+        return LoadDocument<List<ScheduledTask>>(connection, SchedulerTasksRowId) ?? new List<ScheduledTask>();
     }
 
     public void SaveScheduledTasks(IReadOnlyCollection<ScheduledTask> tasks)
@@ -222,10 +270,22 @@ public sealed class AppStateStore
         {
             DataSource = databasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared
+            Cache = SqliteCacheMode.Shared,
+            Pooling = true
         };
 
         return new SqliteConnection(builder.ToString());
+    }
+
+    private static void ConfigureConnection(SqliteConnection connection, bool configureJournalMode = false)
+    {
+        ExecuteNonQuery(connection, "PRAGMA busy_timeout=3000;");
+        if (configureJournalMode)
+        {
+            ExecuteNonQuery(connection, "PRAGMA journal_mode=WAL;");
+        }
+        ExecuteNonQuery(connection, "PRAGMA synchronous=NORMAL;");
+        ExecuteNonQuery(connection, "PRAGMA temp_store=MEMORY;");
     }
 
     private static void ExecuteNonQuery(SqliteConnection connection, string commandText)
@@ -245,7 +305,9 @@ public sealed class AppStateStore
         XmlSerializer serializer = new(typeof(List<TestHistoryEntry>));
         using StreamReader reader = new(legacyHistoryPath);
         List<TestHistoryEntry> importedEntries = (List<TestHistoryEntry>)(serializer.Deserialize(reader) ?? new List<TestHistoryEntry>());
-        SaveHistory(importedEntries.OrderByDescending(entry => entry.RunDate).ToList());
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        SaveHistory(connection, transaction, importedEntries.OrderByDescending(entry => entry.RunDate).ToList());
+        transaction.Commit();
     }
 
     private void ImportLegacySnapshotIfNeeded(SqliteConnection connection)
@@ -259,7 +321,7 @@ public sealed class AppStateStore
         DashboardSnapshot? snapshot = JsonConvert.DeserializeObject<DashboardSnapshot>(json);
         if (snapshot != null)
         {
-            SaveDashboardSnapshot(snapshot);
+            SaveDashboardSnapshot(connection, snapshot);
         }
     }
 
@@ -270,7 +332,7 @@ public sealed class AppStateStore
             return;
         }
 
-        SaveSettings(new PersistedAppSettings
+        SaveDocument(connection, SettingsRowId, new PersistedAppSettings
         {
             DomainControllers = Settings.Default.DomainControllers,
             RecipientEmail = Settings.Default.RecipientEmail,
@@ -295,7 +357,7 @@ public sealed class AppStateStore
         XmlSerializer serializer = new(typeof(List<ScheduledTask>));
         using StreamReader reader = new(legacySchedulerTasksPath);
         List<ScheduledTask> importedTasks = (List<ScheduledTask>)(serializer.Deserialize(reader) ?? new List<ScheduledTask>());
-        SaveScheduledTasks(importedTasks);
+        SaveDocument(connection, SchedulerTasksRowId, importedTasks);
     }
 
     private static long GetHistoryRowCount(SqliteConnection connection)
@@ -333,6 +395,13 @@ public sealed class AppStateStore
     {
         using SqliteConnection connection = CreateConnection();
         connection.Open();
+        ConfigureConnection(connection);
+
+        return LoadDocument<T>(connection, id);
+    }
+
+    private static T? LoadDocument<T>(SqliteConnection connection, string id) where T : class
+    {
 
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
@@ -354,11 +423,16 @@ public sealed class AppStateStore
 
     private void SaveDocument<T>(string id, T document)
     {
-        string payload = JsonConvert.SerializeObject(document, Formatting.None);
-
         using SqliteConnection connection = CreateConnection();
         connection.Open();
+        ConfigureConnection(connection);
 
+        SaveDocument(connection, id, document);
+    }
+
+    private static void SaveDocument<T>(SqliteConnection connection, string id, T document)
+    {
+        string payload = JsonConvert.SerializeObject(document, Formatting.None);
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO AppDocuments (Id, UpdatedAtTicks, JsonPayload)
@@ -418,3 +492,9 @@ public sealed class AppStateStore
         return true;
     }
 }
+
+public sealed record AppStartupState(
+    PersistedAppSettings Settings,
+    DashboardSnapshot? DashboardSnapshot,
+    List<TestHistoryEntry> History,
+    List<ScheduledTask> ScheduledTasks);
