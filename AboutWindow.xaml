@@ -72,8 +72,8 @@
                         <TextBlock Grid.Row="1" Grid.Column="1" x:Name="FrameworkText" Foreground="#17324D" FontSize="13" Margin="0,4,0,0"/>
                         <TextBlock Grid.Row="2" Text="Project" FontWeight="SemiBold" Foreground="#4A5B6C" FontSize="13" Margin="0,4,0,0"/>
                         <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,4,0,0">
-                            <Hyperlink NavigateUri="https://github.com/CianRogers/AD-Guardian" RequestNavigate="Hyperlink_RequestNavigate" FontSize="13">
-                                github.com/CianRogers/AD-Guardian
+                            <Hyperlink NavigateUri="https://github.com/VBCDR/AD-Guardian" RequestNavigate="Hyperlink_RequestNavigate" FontSize="13">
+                                github.com/VBCDR/AD-Guardian
                             </Hyperlink>
                         </TextBlock>
                     </Grid>

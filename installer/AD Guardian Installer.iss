@@ -168,6 +168,9 @@ end;
 
 procedure InitializeWizard();
 begin
+  if WizardSilent then
+    Exit;
+
   if not ExistingInstallDetected then
     Exit;
 
