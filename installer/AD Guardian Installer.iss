@@ -68,6 +68,7 @@ const
 var
   ExistingInstallDetected: Boolean;
   UpdateMode: Boolean;
+  ClosingForExternalUninstall: Boolean;
   ExistingInstallPath: string;
   ExistingInstallUninstallString: string;
   ExistingInstallPage: TWizardPage;
@@ -147,6 +148,7 @@ end;
 function InitializeSetup(): Boolean;
 begin
   UpdateMode := Pos('/UPDATE', UpperCase(GetCmdTail)) > 0;
+  ClosingForExternalUninstall := False;
   ExistingInstallDetected := TryReadExistingInstall(ExistingInstallPath, ExistingInstallUninstallString);
   Result := True;
 end;
@@ -170,6 +172,7 @@ begin
     Exit;
   end;
 
+  ClosingForExternalUninstall := True;
   WizardForm.Close;
 end;
 
@@ -225,5 +228,24 @@ begin
       Result := False;
       LaunchUninstallerAndExit;
     end;
+  end;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := False;
+
+  if UpdateMode or WizardSilent then
+    Exit;
+
+  if ExistingInstallDetected and (PageID = wpWelcome) then
+    Result := True;
+end;
+
+procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
+begin
+  if ClosingForExternalUninstall then
+  begin
+    Confirm := False;
   end;
 end;
