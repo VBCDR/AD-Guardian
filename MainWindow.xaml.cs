@@ -126,7 +126,8 @@ public partial class MainWindow : Window, IDisposable
     private bool suppressLogsWorkspaceRefresh;
     private bool schedulerTasksLoaded;
     private Task? startupInitializationTask;
-    private string cachedLogLinesSource = string.Empty;
+    private int cachedLogLinesHash;
+    private int cachedLogLinesLength = -1;
     private IReadOnlyList<LogLine> cachedLogLines = Array.Empty<LogLine>();
     private readonly Dictionary<string, CachedScheduledLog> scheduledLogCache = new(StringComparer.OrdinalIgnoreCase);
     private DateTime lastProgressUiUpdateUtc = DateTime.MinValue;
@@ -164,6 +165,7 @@ public partial class MainWindow : Window, IDisposable
 
         InitializeComponent();
         Stopwatch startupStopwatch = Stopwatch.StartNew();
+        dashboardRefreshTimer.Tick += DashboardRefreshTimer_Tick;
         UpdateActionButtonStates();
         InitializeBoundViews();
         cancellationTokenSource = new CancellationTokenSource();
@@ -1310,7 +1312,8 @@ public partial class MainWindow : Window, IDisposable
         latestRunDetailsText = string.Empty;
         latestLogsText = string.Empty;
         latestLogsFilePath = string.Empty;
-        cachedLogLinesSource = string.Empty;
+        cachedLogLinesLength = -1;
+        cachedLogLinesHash = 0;
         cachedLogLines = Array.Empty<LogLine>();
         logsTextPending = false;
         dgLogsEntries.SelectedItem = null;
@@ -3249,13 +3252,15 @@ public partial class MainWindow : Window, IDisposable
 
     private IReadOnlyList<LogLine> GetCachedLogLines(string text)
     {
-        if (string.Equals(cachedLogLinesSource, text, StringComparison.Ordinal))
+        int textHash = text.GetHashCode(StringComparison.Ordinal);
+        if (cachedLogLinesLength == text.Length && cachedLogLinesHash == textHash)
         {
             return cachedLogLines;
         }
 
         cachedLogLines = BuildLogLines(text);
-        cachedLogLinesSource = text;
+        cachedLogLinesLength = text.Length;
+        cachedLogLinesHash = textHash;
         return cachedLogLines;
     }
 
@@ -4173,43 +4178,58 @@ public partial class MainWindow : Window, IDisposable
 
     private async Task<string> RunCommandAsync(string command, string logFilePath, CancellationToken token)
     {
-        return await Task.Run(() =>
+        try
         {
+            using Process process = new();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/C {command}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            process.Start();
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(token);
             try
             {
-                using Process process = new();
-                process.StartInfo = new ProcessStartInfo
-                {
-                    FileName = "cmd.exe",
-                    Arguments = $"/C {command}",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                process.Start();
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-                process.WaitForExit();
-
-                if (token.IsCancellationRequested)
-                {
-                    return "Execution Cancelled";
-                }
-
-                AppendToLogWithRetry(logFilePath, $"Command: {command}\nTimestamp: {DateTime.Now}\n{output}{error}\n");
+                await process.WaitForExitAsync(token).ConfigureAwait(false);
+                string output = await outputTask.ConfigureAwait(false);
+                string error = await errorTask.ConfigureAwait(false);
+                await AppendToLogWithRetryAsync(logFilePath, $"Command: {command}\nTimestamp: {DateTime.Now}\n{output}{error}\n", token).ConfigureAwait(false);
                 return output + error;
             }
-            catch (Exception ex)
+            catch (OperationCanceledException)
             {
-                AppendToLogWithRetry(logFilePath, $"Error running command: {ex.Message}\n");
-                return "ERROR: " + ex.Message;
+                TryKillProcess(process);
+                return "Execution Cancelled";
             }
-        }, token);
+        }
+        catch (Exception ex)
+        {
+            await AppendToLogWithRetryAsync(logFilePath, $"Error running command: {ex.Message}\n", CancellationToken.None).ConfigureAwait(false);
+            return "ERROR: " + ex.Message;
+        }
     }
 
-    private static void AppendToLogWithRetry(string logFilePath, string contents)
+    private static void TryKillProcess(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static async Task AppendToLogWithRetryAsync(string logFilePath, string contents, CancellationToken token)
     {
         const int maxRetries = 5;
         const int delayMs = 200;
@@ -4217,12 +4237,12 @@ public partial class MainWindow : Window, IDisposable
         {
             try
             {
-                File.AppendAllText(logFilePath, contents);
+                await File.AppendAllTextAsync(logFilePath, contents, token).ConfigureAwait(false);
                 return;
             }
             catch (IOException) when (i < maxRetries - 1)
             {
-                System.Threading.Thread.Sleep(delayMs);
+                await Task.Delay(delayMs, token).ConfigureAwait(false);
             }
         }
     }
@@ -4332,7 +4352,7 @@ public partial class MainWindow : Window, IDisposable
 
     private async Task<string> RunPowerShellScriptAsync(string script, string logFilePath, CancellationToken token)
     {
-        return await Task.Run(() =>
+        try
         {
             using Process process = new();
             process.StartInfo = new ProcessStartInfo
@@ -4345,12 +4365,28 @@ public partial class MainWindow : Window, IDisposable
                 CreateNoWindow = true
             };
             process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            try { File.AppendAllText(logFilePath, $"[PowerShell] {script}\n{output}\n{error}\n"); } catch { }
-            return string.IsNullOrWhiteSpace(output) ? error : output.Trim();
-        }, token);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(token);
+
+            try
+            {
+                await process.WaitForExitAsync(token).ConfigureAwait(false);
+                string output = await outputTask.ConfigureAwait(false);
+                string error = await errorTask.ConfigureAwait(false);
+                await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell] {script}\n{output}\n{error}\n", token).ConfigureAwait(false);
+                return string.IsNullOrWhiteSpace(output) ? error : output.Trim();
+            }
+            catch (OperationCanceledException)
+            {
+                TryKillProcess(process);
+                return "Execution Cancelled";
+            }
+        }
+        catch (Exception ex)
+        {
+            await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell Error] {script}\n{ex.Message}\n", CancellationToken.None).ConfigureAwait(false);
+            return "ERROR: " + ex.Message;
+        }
     }
 
     private void ViewSelectedLog_Click(object sender, RoutedEventArgs e)
@@ -4482,7 +4518,8 @@ public partial class MainWindow : Window, IDisposable
         cancellationTokenSource?.Dispose();
         scheduledLogCache.Clear();
         cachedLogLines = Array.Empty<LogLine>();
-        cachedLogLinesSource = string.Empty;
+        cachedLogLinesLength = -1;
+        cachedLogLinesHash = 0;
         latestLogsText = string.Empty;
     }
 

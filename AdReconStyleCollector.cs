@@ -179,9 +179,11 @@ if (Get-Command Get-GPO -ErrorAction SilentlyContinue) {
         process.Start();
         try
         {
-            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
             await process.WaitForExitAsync(timeoutCts.Token);
+            string output = await outputTask.ConfigureAwait(false);
+            string error = await errorTask.ConfigureAwait(false);
 
             return string.IsNullOrWhiteSpace(output) ? error : output.Trim();
         }
@@ -189,6 +191,11 @@ if (Get-Command Get-GPO -ErrorAction SilentlyContinue) {
         {
             TryTerminateProcess(process);
             throw new TimeoutException($"PowerShell inventory collection exceeded {PowerShellTimeout.TotalSeconds:0} seconds.");
+        }
+        catch (OperationCanceledException)
+        {
+            TryTerminateProcess(process);
+            throw;
         }
     }
 

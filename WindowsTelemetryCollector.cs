@@ -107,15 +107,22 @@ $services = @('NTDS','DNS','DFSR','Netlogon','KDC','W32Time')
         process.Start();
         try
         {
-            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
             await process.WaitForExitAsync(timeoutCts.Token);
+            string output = await outputTask.ConfigureAwait(false);
+            string error = await errorTask.ConfigureAwait(false);
             return string.IsNullOrWhiteSpace(output) ? error : output.Trim();
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             TryTerminateProcess(process);
             throw new TimeoutException($"PowerShell telemetry collection exceeded {PowerShellTimeout.TotalSeconds:0} seconds.");
+        }
+        catch (OperationCanceledException)
+        {
+            TryTerminateProcess(process);
+            throw;
         }
     }
 
