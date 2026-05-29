@@ -167,9 +167,10 @@ public partial class MainWindow : Window, IDisposable
         UpdateActionButtonStates();
         InitializeBoundViews();
         cancellationTokenSource = new CancellationTokenSource();
-        RefreshDashboardNow();
         UpdateNavigationState();
-        startupInitializationTask = InitializeAppStateAsync(startupStopwatch);
+        startupInitializationTask = isScheduledLaunch
+            ? InitializeAppStateAsync(startupStopwatch)
+            : DeferStartupInitializationAsync(startupStopwatch);
 
         if (isScheduledLaunch)
         {
@@ -190,6 +191,12 @@ public partial class MainWindow : Window, IDisposable
                 await RunScheduledTestsAsync(scheduledTaskName).ConfigureAwait(true);
             }, DispatcherPriority.Background);
         }
+    }
+
+    private async Task DeferStartupInitializationAsync(Stopwatch startupStopwatch)
+    {
+        await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
+        await InitializeAppStateAsync(startupStopwatch).ConfigureAwait(true);
     }
 
     private async Task RunScheduledTestsAsync(string scheduledTaskName)
@@ -2571,8 +2578,11 @@ public partial class MainWindow : Window, IDisposable
         FindingsCriticalCountText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
 
         findingItemsView?.Refresh();
-        RefreshLogsView();
-        UpdateLogsWorkspaceSummary();
+        if (MainTabControl.SelectedIndex == 5)
+        {
+            RefreshLogsView();
+            UpdateLogsWorkspaceSummary();
+        }
         UpdateHealthSummaryText();
         UpdateSecurityGrid();
         RefreshHomeFindingsSummary();
