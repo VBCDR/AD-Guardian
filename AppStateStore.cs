@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Xml.Serialization;
-using Domain_Guardian.Properties;
 using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 
@@ -15,30 +13,20 @@ public sealed class AppStateStore
     private const string SnapshotRowId = "dashboard";
     private const string SettingsRowId = "settings";
     private const string SchedulerTasksRowId = "schedulerTasks";
-    private const string LegacyMigrationRowId = "legacyMigration";
     private static readonly object InitializationLock = new();
     private static readonly HashSet<string> InitializedDatabasePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly string databasePath;
-    private readonly string legacyHistoryPath;
-    private readonly string legacySnapshotPath;
-    private readonly string legacySchedulerTasksPath;
 
-    public AppStateStore(string databasePath, string legacyHistoryPath, string legacySnapshotPath, string legacySchedulerTasksPath)
+    public AppStateStore(string databasePath)
     {
         this.databasePath = databasePath;
-        this.legacyHistoryPath = legacyHistoryPath;
-        this.legacySnapshotPath = legacySnapshotPath;
-        this.legacySchedulerTasksPath = legacySchedulerTasksPath;
     }
 
     public static AppStateStore CreateDefault()
     {
         string appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdHealthMonitor");
         return new AppStateStore(
-            Path.Combine(appDataPath, "AppState.db"),
-            Path.Combine(appDataPath, "TestHistory.xml"),
-            Path.Combine(appDataPath, "DashboardSnapshot.json"),
-            Path.Combine(appDataPath, "ScheduledTasks.xml"));
+            Path.Combine(appDataPath, "AppState.db"));
     }
 
     public void Initialize()
@@ -90,16 +78,6 @@ public sealed class AppStateStore
                     JsonPayload TEXT NOT NULL
                 );
                 """);
-
-            if (!HasDocument(connection, LegacyMigrationRowId))
-            {
-                ImportLegacyHistoryIfNeeded(connection);
-                ImportLegacySnapshotIfNeeded(connection);
-                ImportLegacySettingsIfNeeded(connection);
-                ImportLegacySchedulerTasksIfNeeded(connection);
-                ArchiveLegacyStateFiles(connection);
-                SaveDocument(connection, LegacyMigrationRowId, new { CompletedAtUtc = DateTime.UtcNow });
-            }
 
             InitializedDatabasePaths.Add(normalizedDatabasePath);
         }
@@ -315,90 +293,6 @@ public sealed class AppStateStore
         command.ExecuteNonQuery();
     }
 
-    private void ImportLegacyHistoryIfNeeded(SqliteConnection connection)
-    {
-        if (!File.Exists(legacyHistoryPath) || GetHistoryRowCount(connection) > 0)
-        {
-            return;
-        }
-
-        XmlSerializer serializer = new(typeof(List<TestHistoryEntry>));
-        using StreamReader reader = new(legacyHistoryPath);
-        List<TestHistoryEntry> importedEntries = (List<TestHistoryEntry>)(serializer.Deserialize(reader) ?? new List<TestHistoryEntry>());
-        using SqliteTransaction transaction = connection.BeginTransaction();
-        SaveHistory(connection, transaction, importedEntries.OrderByDescending(entry => entry.RunDate).ToList());
-        transaction.Commit();
-    }
-
-    private void ImportLegacySnapshotIfNeeded(SqliteConnection connection)
-    {
-        if (!File.Exists(legacySnapshotPath) || HasDashboardSnapshot(connection))
-        {
-            return;
-        }
-
-        string json = File.ReadAllText(legacySnapshotPath);
-        DashboardSnapshot? snapshot = JsonConvert.DeserializeObject<DashboardSnapshot>(json);
-        if (snapshot != null)
-        {
-            SaveDashboardSnapshot(connection, snapshot);
-        }
-    }
-
-    private void ImportLegacySettingsIfNeeded(SqliteConnection connection)
-    {
-        if (HasDocument(connection, SettingsRowId))
-        {
-            return;
-        }
-
-        SaveDocument(connection, SettingsRowId, new PersistedAppSettings
-        {
-            DomainControllers = Settings.Default.DomainControllers,
-            RecipientEmail = Settings.Default.RecipientEmail,
-            TestDnsCheck = Settings.Default.TestDnsCheck,
-            TestReplication = Settings.Default.TestReplication,
-            TestTimeSkew = Settings.Default.TestTimeSkew,
-            TestLdapBind = Settings.Default.TestLdapBind,
-            TestCertDhcp = Settings.Default.TestCertDhcp,
-            TestSmbLdapSigning = Settings.Default.TestSmbLdapSigning,
-            SendEmailManual = Settings.Default.SendEmailManual,
-            SendEmailScheduled = Settings.Default.SendEmailScheduled
-        });
-    }
-
-    private void ImportLegacySchedulerTasksIfNeeded(SqliteConnection connection)
-    {
-        if (!File.Exists(legacySchedulerTasksPath) || HasDocument(connection, SchedulerTasksRowId))
-        {
-            return;
-        }
-
-        XmlSerializer serializer = new(typeof(List<ScheduledTask>));
-        using StreamReader reader = new(legacySchedulerTasksPath);
-        List<ScheduledTask> importedTasks = (List<ScheduledTask>)(serializer.Deserialize(reader) ?? new List<ScheduledTask>());
-        SaveDocument(connection, SchedulerTasksRowId, importedTasks);
-    }
-
-    private static long GetHistoryRowCount(SqliteConnection connection)
-    {
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(1) FROM TestHistory;";
-        return (long)(command.ExecuteScalar() ?? 0L);
-    }
-
-    private static bool HasDashboardSnapshot(SqliteConnection connection)
-    {
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT COUNT(1)
-            FROM DashboardSnapshot
-            WHERE Id = $id;
-            """;
-        command.Parameters.AddWithValue("$id", SnapshotRowId);
-        return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
-    }
-
     private static bool HasDocument(SqliteConnection connection, string id)
     {
         using SqliteCommand command = connection.CreateCommand();
@@ -469,50 +363,6 @@ public sealed class AppStateStore
         command.ExecuteNonQuery();
     }
 
-    private void ArchiveLegacyStateFiles(SqliteConnection connection)
-    {
-        bool hasHistory = GetHistoryRowCount(connection) > 0;
-        bool hasSnapshot = HasDashboardSnapshot(connection);
-        bool hasSchedulerTasks = HasDocument(connection, SchedulerTasksRowId);
-
-        string backupRoot = Path.Combine(Path.GetDirectoryName(databasePath)!, "LegacyStateBackup");
-        string timestampFolder = Path.Combine(backupRoot, DateTime.UtcNow.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture));
-        bool archivedAny = false;
-
-        archivedAny |= ArchiveLegacyFileIfEligible(legacyHistoryPath, hasHistory, timestampFolder);
-        archivedAny |= ArchiveLegacyFileIfEligible(legacySnapshotPath, hasSnapshot, timestampFolder);
-        archivedAny |= ArchiveLegacyFileIfEligible(legacySchedulerTasksPath, hasSchedulerTasks, timestampFolder);
-
-        if (archivedAny)
-        {
-            File.WriteAllText(
-                Path.Combine(timestampFolder, "README.txt"),
-                "These files were archived after successful migration to AppState.db. They are no longer used by the live app.");
-        }
-    }
-
-    private static bool ArchiveLegacyFileIfEligible(string sourcePath, bool hasMigratedData, string archiveDirectory)
-    {
-        if (!hasMigratedData || !File.Exists(sourcePath))
-        {
-            return false;
-        }
-
-        Directory.CreateDirectory(archiveDirectory);
-        string destinationPath = Path.Combine(archiveDirectory, Path.GetFileName(sourcePath));
-
-        if (File.Exists(destinationPath))
-        {
-            string fileName = Path.GetFileNameWithoutExtension(sourcePath);
-            string extension = Path.GetExtension(sourcePath);
-            destinationPath = Path.Combine(
-                archiveDirectory,
-                $"{fileName}_{DateTime.UtcNow:HHmmssfff}{extension}");
-        }
-
-        File.Move(sourcePath, destinationPath);
-        return true;
-    }
 }
 
 public sealed record AppStartupState(

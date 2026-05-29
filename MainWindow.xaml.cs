@@ -93,14 +93,6 @@ public partial class MainWindow : Window, IDisposable
     private AdInventorySnapshot latestInventory = AdInventorySnapshot.Empty;
     private TelemetrySnapshot latestTelemetry = TelemetrySnapshot.Empty;
     private DashboardSnapshot? cachedDashboardSnapshot;
-    private readonly string historyFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "AdHealthMonitor",
-        "TestHistory.xml");
-    private readonly string dashboardSnapshotFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "AdHealthMonitor",
-        "DashboardSnapshot.json");
     private const string LogDirectoryPath = @"C:\ADCheckLogs";
     private const string RunLogsDirectoryName = "runs";
 
@@ -108,10 +100,6 @@ public partial class MainWindow : Window, IDisposable
     private static readonly Brush ActiveNavBgBrush = FrozenBrush(Color.FromRgb(26, 115, 232));
     private static readonly Brush InactiveNavFgBrush = FrozenBrush(Color.FromRgb(176, 188, 201));
     private static Brush FrozenBrush(Color color) { var b = new SolidColorBrush(color); b.Freeze(); return b; }
-    private readonly string schedulerTasksFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "AdHealthMonitor",
-        "ScheduledTasks.xml");
     private int schedulerSelectedTaskIndex = -1;
     private readonly DispatcherTimer dashboardRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
     private ICollectionView? resultItemsView;
@@ -158,10 +146,7 @@ public partial class MainWindow : Window, IDisposable
         Thread.CurrentThread.CurrentCulture = new CultureInfo("en-GB");
         Thread.CurrentThread.CurrentUICulture = new CultureInfo("en-GB");
         appStateStore = new AppStateStore(
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdHealthMonitor", "AppState.db"),
-            historyFilePath,
-            dashboardSnapshotFilePath,
-            schedulerTasksFilePath);
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdHealthMonitor", "AppState.db"));
 
         InitializeComponent();
         Stopwatch startupStopwatch = Stopwatch.StartNew();
