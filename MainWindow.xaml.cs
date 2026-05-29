@@ -162,9 +162,8 @@ public partial class MainWindow : Window, IDisposable
             dashboardSnapshotFilePath,
             schedulerTasksFilePath);
 
-        Stopwatch startupStopwatch = Stopwatch.StartNew();
-        appStateStore.Initialize();
         InitializeComponent();
+        Stopwatch startupStopwatch = Stopwatch.StartNew();
         UpdateActionButtonStates();
         InitializeBoundViews();
         cancellationTokenSource = new CancellationTokenSource();
@@ -511,6 +510,8 @@ public partial class MainWindow : Window, IDisposable
     {
         try
         {
+            await Task.Run(appStateStore.Initialize).ConfigureAwait(true);
+
             Task<PersistedAppSettings> settingsTask = Task.Run(appStateStore.LoadSettings);
             Task<DashboardSnapshot?> snapshotTask = Task.Run(appStateStore.LoadDashboardSnapshot);
             Task<List<TestHistoryEntry>> historyTask = Task.Run(appStateStore.LoadHistory);

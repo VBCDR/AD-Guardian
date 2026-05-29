@@ -76,6 +76,23 @@ var
   UninstallRadio: TNewRadioButton;
   ExistingInstallCaption: TNewStaticText;
 
+function GetRoamingAppDataStatePath(): string;
+var
+  AppDataPath: string;
+begin
+  AppDataPath := GetEnv('APPDATA');
+  if AppDataPath = '' then
+    Result := ''
+  else
+    Result := AddBackslash(AppDataPath) + 'AdHealthMonitor';
+end;
+
+procedure SetInstallStatus(const Message: string);
+begin
+  if WizardForm <> nil then
+    WizardForm.StatusLabel.Caption := Message;
+end;
+
 function GetDefaultInstallDir(Param: string): string;
 begin
   if ExistingInstallDetected and (ExistingInstallPath <> '') then
@@ -248,4 +265,41 @@ begin
   begin
     Confirm := False;
   end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  StateDir: string;
+  StateDbPath: string;
+begin
+  if CurStep = ssInstall then
+  begin
+    SetInstallStatus('Creating application folders and log paths...');
+    StateDir := GetRoamingAppDataStatePath();
+    if StateDir <> '' then
+    begin
+      ForceDirectories(StateDir);
+      ForceDirectories(AddBackslash(StateDir) + 'runs');
+    end;
+    ForceDirectories('C:\ADCheckLogs');
+    ForceDirectories('C:\ADCheckLogs\runs');
+
+    SetInstallStatus('Preparing SQLite state database...');
+    if StateDir <> '' then
+    begin
+      StateDbPath := AddBackslash(StateDir) + 'AppState.db';
+      if not FileExists(StateDbPath) then
+        SaveStringToFile(StateDbPath, '', False);
+    end;
+  end
+  else if CurStep = ssPostInstall then
+  begin
+    SetInstallStatus('Finalising shortcuts, uninstall registration, and launch options...');
+  end;
+end;
+
+procedure CurInstallProgressChanged(CurProgress, MaxProgress: Integer);
+begin
+  if CurProgress > 0 then
+    SetInstallStatus('Installing application files...');
 end;
