@@ -1,0 +1,70 @@
+<Window x:Class="Domain_Guardian.UpdateProgressWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Installing Update"
+        Width="440"
+        Height="230"
+        WindowStartupLocation="CenterOwner"
+        Background="#F5F7FA"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        AllowsTransparency="True">
+    <Border Background="#F5F7FA" CornerRadius="14" BorderBrush="#D7E2EC" BorderThickness="1" Padding="24">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <Border Background="#E3F2FD" CornerRadius="20" Width="40" Height="40" Margin="0,0,14,0">
+                    <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                               Foreground="#1A73E8" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Installing Update"
+                               FontSize="18" FontWeight="Bold" Foreground="#17324D"/>
+                    <TextBlock x:Name="VersionInfoText"
+                               Text=""
+                               FontSize="13" Foreground="#7A8B9F" Margin="0,2,0,0"/>
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Grid.Row="1"
+                       x:Name="StatusText"
+                       Text="Preparing update..."
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Foreground="#17324D"
+                       Margin="0,0,0,8"/>
+
+            <TextBlock Grid.Row="2"
+                       x:Name="DetailText"
+                       Text="The app will download the update and then launch the installer."
+                       TextWrapping="Wrap"
+                       FontSize="13"
+                       Foreground="#4A5B6C"
+                       Margin="0,0,0,14"/>
+
+            <ProgressBar Grid.Row="3"
+                         x:Name="ProgressBarControl"
+                         Height="16"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="0"
+                         IsIndeterminate="True"/>
+
+            <TextBlock Grid.Row="4"
+                       x:Name="PercentText"
+                       Text="Starting..."
+                       HorizontalAlignment="Right"
+                       Margin="0,10,0,0"
+                       Foreground="#7A8B9F"
+                       FontSize="12"/>
+        </Grid>
+    </Border>
+</Window>

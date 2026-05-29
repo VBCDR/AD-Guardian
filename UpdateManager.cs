@@ -141,8 +141,45 @@ internal static class UpdateManager
                 return;
             }
 
-            string installerPath = await DownloadInstallerAsync(asset).ConfigureAwait(true);
-            LaunchSilentInstallerAndRestart(installerPath);
+            UpdateProgressWindow progressWindow = new(latestVersion, currentVersion)
+            {
+                Owner = owner
+            };
+            progressWindow.SetStage(
+                "Downloading update",
+                "Downloading the latest installer before the update starts.",
+                isIndeterminate: true);
+            progressWindow.Show();
+
+            string installerPath;
+            try
+            {
+                installerPath = await DownloadInstallerAsync(asset, progress =>
+                {
+                    progressWindow.Dispatcher.Invoke(() =>
+                    {
+                        progressWindow.SetStage(
+                            "Downloading update",
+                            "Downloading the latest installer before the update starts.",
+                            isIndeterminate: !progress.TotalBytes.HasValue);
+                        progressWindow.SetProgress(progress.BytesReceived, progress.TotalBytes);
+                    });
+                }).ConfigureAwait(true);
+            }
+            catch
+            {
+                progressWindow.Close();
+                throw;
+            }
+
+            progressWindow.SetStage(
+                "Starting installer",
+                "The installer is being launched. You will see installation progress in the setup window.",
+                isIndeterminate: true);
+            await Task.Delay(500).ConfigureAwait(true);
+
+            LaunchInstallerForUpdate(installerPath);
+            progressWindow.Close();
             Application.Current.Shutdown();
         }
         catch (Exception ex)
@@ -173,7 +210,13 @@ internal static class UpdateManager
         }
     }
 
-    private static async Task<string> DownloadInstallerAsync(GitHubAsset asset)
+    private sealed class DownloadProgress
+    {
+        public long BytesReceived { get; init; }
+        public long? TotalBytes { get; init; }
+    }
+
+    private static async Task<string> DownloadInstallerAsync(GitHubAsset asset, Action<DownloadProgress> progressCallback)
     {
         string tempDir = Path.Combine(Path.GetTempPath(), "ADGuardianUpdate");
         Directory.CreateDirectory(tempDir);
@@ -181,45 +224,37 @@ internal static class UpdateManager
 
         using HttpClient client = new();
         client.DefaultRequestHeaders.UserAgent.ParseAdd("ADGuardianApp");
-        using HttpResponseMessage response = await client.GetAsync(asset.browser_download_url).ConfigureAwait(false);
+        using HttpResponseMessage response = await client.GetAsync(asset.browser_download_url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
+        long? totalBytes = response.Content.Headers.ContentLength;
+        await using Stream sourceStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
         await using FileStream fs = new(tempFile, FileMode.Create, FileAccess.Write, FileShare.None);
-        await response.Content.CopyToAsync(fs).ConfigureAwait(false);
+
+        byte[] buffer = new byte[81920];
+        long totalRead = 0;
+        int bytesRead;
+        while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+        {
+            await fs.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
+            totalRead += bytesRead;
+            progressCallback(new DownloadProgress
+            {
+                BytesReceived = totalRead,
+                TotalBytes = totalBytes
+            });
+        }
+
         return tempFile;
     }
 
-    private static void LaunchSilentInstallerAndRestart(string installerPath)
+    private static void LaunchInstallerForUpdate(string installerPath)
     {
-        string currentExePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(currentExePath))
-        {
-            throw new InvalidOperationException("Could not determine the current application path for restart.");
-        }
-
-        string scriptPath = Path.Combine(Path.GetTempPath(), "ADGuardianUpdate", "run-update.ps1");
-        Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
-
-        string escapedInstallerPath = installerPath.Replace("'", "''");
-        string escapedExePath = currentExePath.Replace("'", "''");
-        string script = $@"
-Start-Sleep -Seconds 2
-$installer = '{escapedInstallerPath}'
-$appPath = '{escapedExePath}'
-$installerArgs = '/VERYSILENT /SUPPRESSMSGBOXES /NOCANCEL /CLOSEAPPLICATIONS /NORESTART'
-Start-Process -FilePath $installer -ArgumentList $installerArgs -Verb RunAs -Wait
-if (Test-Path $appPath) {{
-    Start-Process -FilePath $appPath
-}}
-";
-
-        File.WriteAllText(scriptPath, script);
-
         Process.Start(new ProcessStartInfo
         {
-            FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
+            FileName = installerPath,
+            Arguments = "/UPDATE /CLOSEAPPLICATIONS",
             UseShellExecute = true,
-            CreateNoWindow = true
+            Verb = "runas"
         });
     }
 

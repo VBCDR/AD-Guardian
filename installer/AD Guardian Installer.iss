@@ -67,6 +67,7 @@ const
 
 var
   ExistingInstallDetected: Boolean;
+  UpdateMode: Boolean;
   ExistingInstallPath: string;
   ExistingInstallUninstallString: string;
   ExistingInstallPage: TWizardPage;
@@ -145,6 +146,7 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
+  UpdateMode := Pos('/UPDATE', UpperCase(GetCmdTail)) > 0;
   ExistingInstallDetected := TryReadExistingInstall(ExistingInstallPath, ExistingInstallUninstallString);
   Result := True;
 end;
@@ -173,7 +175,7 @@ end;
 
 procedure InitializeWizard();
 begin
-  if WizardSilent then
+  if WizardSilent or UpdateMode then
     Exit;
 
   if not ExistingInstallDetected then
