@@ -34,10 +34,7 @@ namespace AdHealthMonitor
             if (!isScheduledLaunch)
             {
                 mainWindow.Show();
-                mainWindow.Loaded += async (_, _) =>
-                {
-                    await UpdateManager.CheckForUpdatesOnLaunchAsync(mainWindow).ConfigureAwait(true);
-                };
+                _ = UpdateManager.ScheduleLaunchUpdateCheckAsync(mainWindow);
             }
         }
 

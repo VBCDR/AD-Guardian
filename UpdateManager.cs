@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using Domain_Guardian;
@@ -55,6 +56,18 @@ internal static class UpdateManager
         await CheckForUpdatesAsync(owner, isManualCheck: false).ConfigureAwait(true);
     }
 
+    public static async Task ScheduleLaunchUpdateCheckAsync(Window owner)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(4)).ConfigureAwait(true);
+
+        if (!owner.IsLoaded || !owner.IsVisible)
+        {
+            return;
+        }
+
+        await CheckForUpdatesAsync(owner, isManualCheck: false).ConfigureAwait(true);
+    }
+
     public static async Task CheckForUpdatesManuallyAsync(Window owner)
     {
         await CheckForUpdatesAsync(owner, isManualCheck: true).ConfigureAwait(true);
@@ -64,7 +77,8 @@ internal static class UpdateManager
     {
         try
         {
-            GitHubRelease? release = await FetchLatestReleaseAsync().ConfigureAwait(true);
+            TimeSpan requestTimeout = isManualCheck ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(3);
+            GitHubRelease? release = await FetchLatestReleaseAsync(requestTimeout).ConfigureAwait(true);
             if (release?.tag_name == null)
             {
                 if (isManualCheck)
@@ -140,12 +154,14 @@ internal static class UpdateManager
         }
     }
 
-    private static async Task<GitHubRelease?> FetchLatestReleaseAsync()
+    private static async Task<GitHubRelease?> FetchLatestReleaseAsync(TimeSpan timeout)
     {
+        using CancellationTokenSource cts = new(timeout);
         using HttpClient client = new();
+        client.Timeout = timeout;
         client.DefaultRequestHeaders.UserAgent.ParseAdd("ADGuardianApp");
         string url = $"https://api.github.com/repos/{GitHubRepo}/releases/latest";
-        string json = await client.GetStringAsync(url).ConfigureAwait(false);
+        string json = await client.GetStringAsync(url, cts.Token).ConfigureAwait(false);
 
         try
         {
