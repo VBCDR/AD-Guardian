@@ -342,7 +342,8 @@ public partial class MainWindow
                 $"<p style='margin:0 0 8px 0;'>Controllers: <strong>{string.Join(", ", dcList)}</strong></p>" +
                 $"<p style='font-size:16px;margin:0 0 4px 0;'>Total tests: <strong>{total}</strong></p>" +
                 $"<p style='font-size:16px;margin:0 0 4px 0;color:{passColor};'>Passed: <strong>{passed}</strong></p>" +
-                $"<p style='font-size:16px;margin:0;color:{failColor};'>Failed: <strong>{failed}</strong></p>" +
+                $"<p style='font-size:16px;margin:0 0 4px 0;color:{failColor};'>Failed: <strong>{failed}</strong></p>" +
+                (failed > 0 ? FormatTestResultTable(allResults, dcList, passColor, failColor) : string.Empty) +
                 "</div>";
 
             string subject = failed > 0 ? "[FAILED] Test Completed - ADG Test Results" : "Test Completed - ADG Test Results";
@@ -478,6 +479,44 @@ public partial class MainWindow
                 $"Passed: {passed}",
                 $"Failed: {failed}"
             ]);
+    }
+
+    private static string FormatTestResultTable(List<TestResult> results, string[] dcList, string passColor, string failColor)
+    {
+        var byServer = results
+            .GroupBy(r => r.Server ?? dcList.FirstOrDefault() ?? "Unknown", StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+        StringBuilder sb = new();
+        sb.Append("<table style='border-collapse:collapse;margin:10px 0;font-size:13px;width:100%;'>");
+        sb.Append("<tr style='background:#f5f5f5;'><th style='padding:6px 10px;text-align:left;border:1px solid #ddd;'>Test</th>" +
+                  "<th style='padding:6px 10px;text-align:left;border:1px solid #ddd;'>Status</th>" +
+                  "<th style='padding:6px 10px;text-align:left;border:1px solid #ddd;'>Details</th></tr>");
+
+        foreach (string dc in dcList)
+        {
+            if (byServer.TryGetValue(dc, out List<TestResult>? dcResults))
+            {
+                foreach (TestResult r in dcResults)
+                {
+                    bool isPass = string.Equals(r.Result, "PASS", StringComparison.OrdinalIgnoreCase);
+                    string bgColor = isPass ? "#f0fdf0" : "#fef2f2";
+                    string textColor = isPass ? passColor : failColor;
+                    string label = isPass ? "✓ Pass" : "✗ Fail";
+                    string display = (r.Server != null && !string.Equals(r.Server, dc, StringComparison.OrdinalIgnoreCase))
+                        ? $"{r.Service} ({r.Server})"
+                        : r.Service ?? "";
+                    string detail = (r.Message ?? "").Length > 80 ? r.Message![..80] + "…" : r.Message ?? "";
+                    sb.Append($"<tr style='background:{bgColor};'><td style='padding:4px 10px;border:1px solid #ddd;'>{System.Net.WebUtility.HtmlEncode(display)}</td>" +
+                              $"<td style='padding:4px 10px;border:1px solid #ddd;color:{textColor};font-weight:bold;'>{label}</td>" +
+                              $"<td style='padding:4px 10px;border:1px solid #ddd;'>{System.Net.WebUtility.HtmlEncode(detail)}</td></tr>");
+                }
+            }
+        }
+
+        sb.Append("</table>");
+        sb.Append("<p style='font-size:12px;color:#666;margin:4px 0 0 0;'>→ Full details in attached ResultsSummary.txt</p>");
+        return sb.ToString();
     }
 
     internal static string WriteResultsSummarySync(RunLogSession session, List<TestResult> results, string summary)
@@ -780,7 +819,17 @@ public partial class MainWindow
         try
         {
             string output = await RunCommandAsync($"w32tm /monitor /computers:{dc}", logFilePath, token);
-            bool passed = !output.Contains("error") && !output.Contains("FAIL");
+
+            bool hasFailed = output.Contains("FAILED", StringComparison.OrdinalIgnoreCase);
+            bool hasErrorCode = output.Contains("error code", StringComparison.OrdinalIgnoreCase);
+            bool hasLastError = output.Contains("last error", StringComparison.OrdinalIgnoreCase);
+            bool hasActualError = output.Contains("has an error", StringComparison.OrdinalIgnoreCase);
+            bool hasSpecificError = hasFailed || hasErrorCode || hasLastError || hasActualError;
+
+            bool passed = !hasSpecificError &&
+                          (output.Contains("offset", StringComparison.OrdinalIgnoreCase) ||
+                           output.Contains("RefID", StringComparison.OrdinalIgnoreCase));
+
             results.Add(new TestResult { Service = "Time Skew", Server = dc, Result = passed ? "PASS" : "FAIL", Message = passed ? "Time sync OK." : "Time skew detected or w32tm error.", LogFilePath = logFilePath });
         }
         catch { results.Add(new TestResult { Service = "Time Skew", Server = dc, Result = "FAIL", Message = "Time sync check failed.", LogFilePath = logFilePath }); }
@@ -792,10 +841,18 @@ public partial class MainWindow
         List<TestResult> results = new();
         try
         {
-            string script = $"try {{ $root = [ADSI]\"LDAP://{dc}\"; $root.distinguishedName; Write-Output \"PASS\" }} catch {{ Write-Output \"FAIL\" }}";
+            string script =
+                "$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " +
+                $"try {{ $root = [ADSI]\"LDAP://{dc}\"; $dn = $root.distinguishedName; Write-Output \"LDAP_OK: $dn\" }} catch {{ Write-Output \"LDAP_FAIL: $($_.Exception.Message)\" }}";
             string output = await RunPowerShellScriptAsync(script, logFilePath, token);
-            bool passed = output.Contains("PASS") && !output.Contains("FAIL");
-            results.Add(new TestResult { Service = "LDAP Bind", Server = dc, Result = passed ? "PASS" : "FAIL", Message = passed ? "LDAP bind succeeded." : "LDAP bind failed.", LogFilePath = logFilePath });
+            bool passed = output.Contains("LDAP_OK", StringComparison.OrdinalIgnoreCase) &&
+                          !output.Contains("LDAP_FAIL", StringComparison.OrdinalIgnoreCase);
+            string message = passed
+                ? "LDAP bind succeeded."
+                : output.Contains("LDAP_FAIL", StringComparison.OrdinalIgnoreCase)
+                    ? output.Trim()
+                    : "LDAP bind failed.";
+            results.Add(new TestResult { Service = "LDAP Bind", Server = dc, Result = passed ? "PASS" : "FAIL", Message = message, LogFilePath = logFilePath });
         }
         catch { results.Add(new TestResult { Service = "LDAP Bind", Server = dc, Result = "FAIL", Message = "LDAP bind threw exception.", LogFilePath = logFilePath }); }
         return results;
@@ -821,10 +878,17 @@ public partial class MainWindow
         List<TestResult> results = new();
         try
         {
-            string script = $"Get-Service -ComputerName {dc} -Name LanmanServer -ErrorAction SilentlyContinue | ForEach-Object {{ if ($_.Status -eq 'Running') {{ 'SMB=Running' }} else {{ 'SMB=' + $_.Status }} }}";
+            string script =
+                $"try {{ $s = Get-Service -ComputerName {dc} -Name LanmanServer -ErrorAction Stop; if ($s.Status -eq 'Running') {{ 'SMB_OK' }} else {{ 'SMB_STATUS=' + $s.Status }} }} catch {{ Write-Output \"SMB_FAIL: $($_.Exception.Message)\" }}";
             string output = await RunPowerShellScriptAsync(script, logFilePath, token);
-            bool smbOk = output.Contains("SMB=Running");
-            results.Add(new TestResult { Service = "SMB/LDAP Signing", Server = dc, Result = smbOk ? "PASS" : "FAIL", Message = smbOk ? "Server service running." : "Server service not running.", LogFilePath = logFilePath });
+            bool passed = output.Contains("SMB_OK", StringComparison.OrdinalIgnoreCase) &&
+                          !output.Contains("SMB_FAIL", StringComparison.OrdinalIgnoreCase);
+            string message = passed
+                ? "Server service running."
+                : output.Contains("SMB_FAIL", StringComparison.OrdinalIgnoreCase)
+                    ? output.Trim()
+                    : "Server service not running.";
+            results.Add(new TestResult { Service = "SMB/LDAP Signing", Server = dc, Result = passed ? "PASS" : "FAIL", Message = message, LogFilePath = logFilePath });
         }
         catch { results.Add(new TestResult { Service = "SMB/LDAP Signing", Server = dc, Result = "FAIL", Message = "Signing check threw exception.", LogFilePath = logFilePath }); }
         return results;
