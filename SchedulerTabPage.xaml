@@ -219,7 +219,8 @@
                                                             Margin="0,4,0,0"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Margin="6,0,0,0">
-                                                <TextBlock Text="Start Time (HH:mm)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                                <TextBlock Text="Start Time" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                                <TextBlock Text="Use 24-hour format, e.g. 14:30 for 2:30 PM" FontSize="11" Foreground="{StaticResource BodyBrush}" Margin="0,2,0,0"/>
                                                 <TextBox x:Name="SchedulerStartTime" x:FieldModifier="public"
                                                          FontSize="14"
                                                          Padding="8"

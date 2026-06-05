@@ -30,24 +30,7 @@
                                                Margin="0,4,0,0"
                                                Foreground="{StaticResource BodyBrush}"/>
                                 </StackPanel>
-                                <Button Grid.Column="1"
-                                        Style="{StaticResource RoundedButtonStyle}"
-                                        Background="#607D8B"
-                                        Width="138"
-                                        Height="38"
-                                        Margin="16,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Click="BackToHealth_Click">
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <TextBlock Text="&#xE72B;"
-                                                   FontFamily="Segoe MDL2 Assets"
-                                                   FontSize="14"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,0,7,0"/>
-                                        <TextBlock Text="Back to Health"
-                                                   VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
+
                             </Grid>
                         </Border>
 
@@ -104,22 +87,23 @@
                                               Margin="0,0,8,6"
                                               VerticalAlignment="Center"
                                               SelectionChanged="LogsFilter_Changed"/>
-                                    <TextBox x:Name="LogsSearchBox" x:FieldModifier="public"
-                                             Width="260"
-                                             Height="38"
-                                             Margin="0,0,8,6"
-                                             Style="{StaticResource ModernTextBoxStyle}"
-                                             VerticalAlignment="Center"
-                                             TextChanged="LogsSearchBox_TextChanged"
-                                             ToolTip="Search within the visible raw log"/>
-                                    <Button Content="Show Full Log"
-                                            Style="{StaticResource RoundedButtonStyle}"
-                                            Background="#1A73E8"
-                                            Width="120"
-                                            Height="38"
-                                            Margin="0,0,8,6"
-                                            Click="ShowFullLog_Click"/>
-                                    <Button Content="Clear"
+                                    <Grid Width="260" Height="38" Margin="0,0,8,6" VerticalAlignment="Center">
+                                        <TextBox x:Name="LogsSearchBox" x:FieldModifier="public"
+                                                 Style="{StaticResource ModernTextBoxStyle}"
+                                                 VerticalAlignment="Stretch"
+                                                 TextChanged="LogsSearchBox_TextChanged"
+                                                 GotFocus="LogsSearchBox_GotFocus"
+                                                 LostFocus="LogsSearchBox_LostFocus"
+                                                 ToolTip="Search within the visible raw log"/>
+                                        <TextBlock x:Name="LogsSearchPlaceholder" x:FieldModifier="public"
+                                                   Text="Search log..."
+                                                   FontSize="13"
+                                                   Foreground="{StaticResource SubtleInkBrush}"
+                                                   Margin="10,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   IsHitTestVisible="False"/>
+                                    </Grid>
+<Button Content="Clear"
                                             Style="{StaticResource RoundedButtonStyle}"
                                             Background="#607D8B"
                                             Width="96"

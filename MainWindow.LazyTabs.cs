@@ -146,6 +146,7 @@ public partial class MainWindow
     private DataGrid dgLogsEntries => EnsureLogsTab().dgLogsEntries;
     private TextBlock LogsFileNameText => EnsureLogsTab().LogsFileNameText;
     private ComboBox LogsSectionFilter => EnsureLogsTab().LogsSectionFilter;
+    private TextBlock LogsSearchPlaceholder => EnsureLogsTab().LogsSearchPlaceholder;
     private DataGrid dgSecurityFindings => EnsureSecurityTab().dgSecurityFindings;
     private TextBlock SecurityCriticalText => EnsureSecurityTab().SecurityCriticalText;
     private TextBlock SecuritySummaryText => EnsureSecurityTab().SecuritySummaryText;
