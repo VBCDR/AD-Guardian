@@ -166,7 +166,7 @@ public partial class AboutWindow : Window
             : new Version(assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build);
     }
 
-    private static bool TryParseReleaseVersion(string rawVersion, out Version version)
+    internal static bool TryParseReleaseVersion(string rawVersion, out Version version)
     {
         version = new Version(0, 0, 0);
         if (string.IsNullOrWhiteSpace(rawVersion))
