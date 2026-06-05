@@ -140,12 +140,12 @@ public partial class MainWindow
     {
         domainControllers = SettingsDcTextBox.Text.Trim();
         recipientEmail = SettingsEmailTextBox.Text.Trim();
-        testDnsCheck = SettingsChkDns.IsChecked ?? true;
+        testDnsCheck = SettingsChkDns.IsChecked ?? false;
         testReplication = SettingsChkReplication.IsChecked ?? true;
-        testTimeSkew = SettingsChkTimeSkew.IsChecked ?? true;
-        testLdapBind = SettingsChkLdapBind.IsChecked ?? true;
-        testCertDhcp = SettingsChkCertDhcp.IsChecked ?? true;
-        testSmbLdapSigning = SettingsChkSmbSigning.IsChecked ?? true;
+        testTimeSkew = SettingsChkTimeSkew.IsChecked ?? false;
+        testLdapBind = SettingsChkLdapBind.IsChecked ?? false;
+        testCertDhcp = SettingsChkCertDhcp.IsChecked ?? false;
+        testSmbLdapSigning = SettingsChkSmbSigning.IsChecked ?? false;
         sendEmailManual = SettingsChkEmailManual.IsChecked ?? true;
         sendEmailScheduled = SettingsChkEmailScheduled.IsChecked ?? true;
         try

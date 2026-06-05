@@ -14,12 +14,12 @@ public class PersistedAppSettingsTests
 
         Assert.Equal(string.Empty, settings.DomainControllers);
         Assert.Equal(string.Empty, settings.RecipientEmail);
-        Assert.True(settings.TestDnsCheck);
+        Assert.False(settings.TestDnsCheck);
         Assert.True(settings.TestReplication);
-        Assert.True(settings.TestTimeSkew);
-        Assert.True(settings.TestLdapBind);
-        Assert.True(settings.TestCertDhcp);
-        Assert.True(settings.TestSmbLdapSigning);
+        Assert.False(settings.TestTimeSkew);
+        Assert.False(settings.TestLdapBind);
+        Assert.False(settings.TestCertDhcp);
+        Assert.False(settings.TestSmbLdapSigning);
         Assert.True(settings.SendEmailManual);
         Assert.True(settings.SendEmailScheduled);
     }

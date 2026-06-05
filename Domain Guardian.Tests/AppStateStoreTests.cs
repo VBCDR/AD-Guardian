@@ -81,7 +81,7 @@ public class AppStateStoreTests : IDisposable
 
         Assert.NotNull(settings);
         Assert.Equal(string.Empty, settings.DomainControllers);
-        Assert.True(settings.TestDnsCheck);
+        Assert.False(settings.TestDnsCheck);
         Assert.True(settings.TestReplication);
     }
 

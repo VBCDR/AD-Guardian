@@ -13,12 +13,12 @@ public partial class TestParametersWindow : Window
     private readonly AppStateStore appStateStore;
     public string DomainControllers { get; private set; } = string.Empty;
     public string RecipientEmail { get; private set; } = string.Empty;
-    public bool TestDnsCheck { get; private set; } = true;
+    public bool TestDnsCheck { get; private set; } = false;
     public bool TestReplication { get; private set; } = true;
-    public bool TestTimeSkew { get; private set; } = true;
-    public bool TestLdapBind { get; private set; } = true;
-    public bool TestCertDhcp { get; private set; } = true;
-    public bool TestSmbLdapSigning { get; private set; } = true;
+    public bool TestTimeSkew { get; private set; } = false;
+    public bool TestLdapBind { get; private set; } = false;
+    public bool TestCertDhcp { get; private set; } = false;
+    public bool TestSmbLdapSigning { get; private set; } = false;
 
     public TestParametersWindow()
     {
@@ -58,12 +58,12 @@ public partial class TestParametersWindow : Window
     {
         DomainControllers = dcTextBox.Text.Trim();
         RecipientEmail = emailTextBox.Text.Trim();
-        TestDnsCheck = chkDnsCheck.IsChecked ?? true;
+        TestDnsCheck = chkDnsCheck.IsChecked ?? false;
         TestReplication = chkReplication.IsChecked ?? true;
-        TestTimeSkew = chkTimeSkew.IsChecked ?? true;
-        TestLdapBind = chkLdapBind.IsChecked ?? true;
-        TestCertDhcp = chkCertDhcp.IsChecked ?? true;
-        TestSmbLdapSigning = chkSmbLdapSigning.IsChecked ?? true;
+        TestTimeSkew = chkTimeSkew.IsChecked ?? false;
+        TestLdapBind = chkLdapBind.IsChecked ?? false;
+        TestCertDhcp = chkCertDhcp.IsChecked ?? false;
+        TestSmbLdapSigning = chkSmbLdapSigning.IsChecked ?? false;
 
         PersistedAppSettings settings = appStateStore.LoadSettings();
         settings.DomainControllers = DomainControllers;

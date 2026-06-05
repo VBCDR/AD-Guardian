@@ -70,12 +70,12 @@ public partial class MainWindow : Window, IDisposable
 
     private string domainControllers = string.Empty;
     private string recipientEmail = string.Empty;
-    private bool testDnsCheck = true;
+    private bool testDnsCheck = false;
     private bool testReplication = true;
-    private bool testTimeSkew = true;
-    private bool testLdapBind = true;
-    private bool testCertDhcp = true;
-    private bool testSmbLdapSigning = true;
+    private bool testTimeSkew = false;
+    private bool testLdapBind = false;
+    private bool testCertDhcp = false;
+    private bool testSmbLdapSigning = false;
     private bool sendEmailManual = true;
     private bool sendEmailScheduled = true;
     private CancellationTokenSource cancellationTokenSource;
