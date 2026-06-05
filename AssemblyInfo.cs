@@ -2,9 +2,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
 
-[assembly: AssemblyVersion("2.0.6.0")]
-[assembly: AssemblyFileVersion("2.0.6.0")]
-[assembly: AssemblyInformationalVersion("2.0.6")]
+[assembly: AssemblyVersion("2.0.7.0")]
+[assembly: AssemblyFileVersion("2.0.7.0")]
+[assembly: AssemblyInformationalVersion("2.0.7")]
 
 [assembly: InternalsVisibleTo("Domain Guardian.Tests")]
 

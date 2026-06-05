@@ -2,7 +2,7 @@
 
 Welcome to **AD Guardian** — a tool built to monitor and test Active Directory health in a smart, automated, and user-friendly way. It simplifies routine AD checks, schedules tests, and sends detailed email notifications so you can always stay on top of your environment.
 
-**Current Version: 2.0.6** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
+**Current Version: 2.0.7** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
 
 ## Features
 
@@ -32,10 +32,17 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 
 ## Changelog
 
+### v2.0.7
+- Fixed false positive failures in optional diagnostic checks (TimeSkew, LDAP Bind, SMB/LDAP Signing)
+- Defaulted optional diagnostic checks (DNS, TimeSkew, LDAP Bind, Cert/DHCP, SMB Signing) to off — old behaviour (dcdiag + repadmin only) restored out of the box
+- Added per-test breakdown table to failure emails so users can see which checks failed without opening the attachment
+- 254 total tests, all passing
+
 ### v2.0.6
-- Added 9 new edge case unit tests (special characters, DateTime preservation, concurrent access)
-- Improved EnsureLogsTab null-safety for lazy tab initialization
-- Removed defensive try-catch in DisplayTestResults in favour of fixing root cause
+- Partial class refactoring: MainWindow.xaml.cs (4912 lines) split into 9 focused partial class files
+- Added DiagnosticsPipelineTests, LogsFilterTests, FindingsLogicTests, HistoryLogicTests
+- Added GitHub Actions CI pipeline (build + test on windows-latest with .NET 9 SDK)
+- 254 total tests (up from 52)
 
 ### v2.0.5
 - Fixed log page crash during test runs (isLogContentReady tracking flag)
