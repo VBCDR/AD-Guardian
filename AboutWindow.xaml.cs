@@ -36,9 +36,22 @@ public partial class AboutWindow : Window
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        Version? v = Assembly.GetExecutingAssembly().GetName().Version;
-        VersionText.Text = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v1.0.0";
-        VersionValueText.Text = v != null ? $"{v.Major}.{v.Minor}.{v.Build} (rev {v.Revision})" : "1.0.0";
+        string informationalVersion = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            VersionText.Text = $"v{informationalVersion}";
+            VersionValueText.Text = informationalVersion;
+        }
+        else
+        {
+            Version? v = Assembly.GetExecutingAssembly().GetName().Version;
+            VersionText.Text = v != null ? $"v{v.Major}.{v.Minor}.{v.Build}" : "v1.0.0";
+            VersionValueText.Text = v != null ? $"{v.Major}.{v.Minor}.{v.Build}" : "1.0.0";
+        }
+
         FrameworkText.Text = RuntimeInformation.FrameworkDescription;
     }
 
@@ -77,7 +90,7 @@ public partial class AboutWindow : Window
         {
             using HttpClient client = new();
             client.DefaultRequestHeaders.UserAgent.ParseAdd("ADGuardianApp");
-            string url = "https://api.github.com/repos/CianRogers/AD-Guardian/releases/latest";
+            string url = "https://api.github.com/repos/VBCDR/AD-Guardian/releases/latest";
             string json = await client.GetStringAsync(url);
 
             GitHubRelease? release;
