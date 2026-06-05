@@ -196,10 +196,10 @@ public partial class MainWindow : Window, IDisposable
 
     private async Task PrewarmPriorityPagesAsync()
     {
+        await Task.Delay(800).ConfigureAwait(true);
         await Dispatcher.InvokeAsync(() =>
         {
             EnsurePageBindings(1);
-            EnsurePageBindings(2);
         }, DispatcherPriority.ApplicationIdle);
     }
 
@@ -1065,7 +1065,10 @@ public partial class MainWindow : Window, IDisposable
         using (logResultItemsView?.DeferRefresh())
         {
         }
-        RefreshLogsWorkspace();
+        if (MainTabControl.SelectedIndex == 5)
+        {
+            RefreshLogsWorkspace();
+        }
         UpdateActionButtonStates();
     }
 
@@ -1921,6 +1924,10 @@ public partial class MainWindow : Window, IDisposable
         {
             _ = LoadLogsTabContentAsync();
         }
+        else if (selectedIndex == 6)
+        {
+            UpdateSecurityGrid();
+        }
         else if (selectedIndex == 8)
         {
             RefreshSchedulerTaskList();
@@ -2631,14 +2638,20 @@ public partial class MainWindow : Window, IDisposable
         FindingsHighCountText.Text = highOrAboveFindings.ToString(CultureInfo.InvariantCulture);
         FindingsCriticalCountText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
 
-        findingItemsView?.Refresh();
+        if (findingsPageBound)
+        {
+            findingItemsView?.Refresh();
+        }
         if (MainTabControl.SelectedIndex == 5)
         {
             RefreshLogsView();
             UpdateLogsWorkspaceSummary();
         }
         UpdateHealthSummaryText();
-        UpdateSecurityGrid();
+        if (securityPageBound || MainTabControl.SelectedIndex == 6)
+        {
+            UpdateSecurityGrid();
+        }
         RefreshHomeFindingsSummary();
         if (MainTabControl.SelectedIndex == 0)
         {

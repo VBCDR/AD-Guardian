@@ -2362,9 +2362,15 @@
                                              x:Name="LogsListBox"
                                              Background="Transparent"
                                              BorderThickness="0"
+                                             ScrollViewer.CanContentScroll="True"
                                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                             ScrollViewer.IsDeferredScrollingEnabled="True"
+                                             VirtualizingPanel.IsVirtualizing="True"
+                                             VirtualizingPanel.VirtualizationMode="Recycling"
+                                             VirtualizingPanel.ScrollUnit="Item"
                                              FontFamily="Consolas"
                                              FontSize="13"
+                                             IsTextSearchEnabled="False"
                                              Padding="8">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
