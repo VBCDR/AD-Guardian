@@ -156,6 +156,7 @@ public partial class MainWindow : Window, IDisposable
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdHealthMonitor", "AppState.db"));
 
         InitializeComponent();
+        SetupAdminWarningBanner();
         Stopwatch startupStopwatch = Stopwatch.StartNew();
         dashboardRefreshTimer.Tick += DashboardRefreshTimer_Tick;
         UpdateActionButtonStates();
@@ -187,6 +188,92 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
+    private void SetupAdminWarningBanner()
+    {
+        if (App.IsRunningAsAdmin || isScheduledLaunch)
+        {
+            return;
+        }
+
+        Grid? mainGrid = ProgressPanel.Parent as Grid;
+        if (mainGrid == null)
+        {
+            return;
+        }
+
+        mainGrid.RowDefinitions.Insert(1, new RowDefinition { Height = GridLength.Auto });
+
+        foreach (UIElement child in mainGrid.Children)
+        {
+            int currentRow = Grid.GetRow(child);
+            if (currentRow >= 1)
+            {
+                Grid.SetRow(child, currentRow + 1);
+            }
+        }
+
+        Border banner = new()
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 248, 230)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(255, 183, 77)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(14, 10, 14, 10),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+
+        StackPanel panel = new() { Orientation = Orientation.Horizontal };
+
+        TextBlock icon = new()
+        {
+            Text = "\uE7BA",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 18,
+            Foreground = new SolidColorBrush(Color.FromRgb(230, 126, 34)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+
+        TextBlock message = new()
+        {
+            Text = "Running without administrator privileges.  Diagnostic tests will require elevation.",
+            FontSize = 13,
+            Foreground = new SolidColorBrush(Color.FromRgb(102, 60, 0)),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        Button elevateButton = new()
+        {
+            Content = "Relaunch as Admin",
+            Style = (Style)FindResource("RoundedButtonStyle"),
+            Background = new SolidColorBrush(Color.FromRgb(255, 152, 0)),
+            Height = 30,
+            Padding = new Thickness(12, 4, 12, 4),
+            Margin = new Thickness(16, 0, 0, 0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        elevateButton.Click += (_, _) =>
+        {
+            if (App.TryRelaunchAsAdmin())
+            {
+                Application.Current.Shutdown();
+            }
+            else
+            {
+                NotificationService.Show(this, "Elevation Failed", "Could not relaunch as administrator.", isError: true);
+            }
+        };
+
+        panel.Children.Add(icon);
+        panel.Children.Add(message);
+        panel.Children.Add(elevateButton);
+        banner.Child = panel;
+
+        Grid.SetRow(banner, 1);
+        mainGrid.Children.Add(banner);
+    }
+
     private async Task DeferStartupInitializationAsync(Stopwatch startupStopwatch)
     {
         await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
@@ -196,7 +283,6 @@ public partial class MainWindow : Window, IDisposable
 
     private async Task PrewarmPriorityPagesAsync()
     {
-        await Task.Delay(800).ConfigureAwait(true);
         await Dispatcher.InvokeAsync(() =>
         {
             EnsurePageBindings(1);
@@ -2177,6 +2263,30 @@ public partial class MainWindow : Window, IDisposable
     {
         if (isRunInProgress)
         {
+            return;
+        }
+
+        if (!App.IsRunningAsAdmin)
+        {
+            MessageBoxResult elevationChoice = MessageBox.Show(
+                this,
+                "Running diagnostic tests requires administrator privileges.\n\n" +
+                "Would you like to relaunch AD Guardian as administrator?",
+                "Administrator Required",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (elevationChoice == MessageBoxResult.Yes)
+            {
+                if (App.TryRelaunchAsAdmin())
+                {
+                    Application.Current.Shutdown();
+                    return;
+                }
+
+                NotificationService.Show(this, "Elevation Failed", "Could not relaunch as administrator. Please start AD Guardian manually using 'Run as administrator'.", isError: true);
+            }
+
             return;
         }
 
@@ -4316,6 +4426,45 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
+    private async Task<string> RunPowerShellScriptAsync(string script, string logFilePath, CancellationToken token)
+    {
+        try
+        {
+            using Process process = new();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script.Replace("\"", "\\\"")}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            process.Start();
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(token);
+
+            try
+            {
+                await process.WaitForExitAsync(token).ConfigureAwait(false);
+                string output = await outputTask.ConfigureAwait(false);
+                string error = await errorTask.ConfigureAwait(false);
+                await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell] {script}\n{output}\n{error}\n", token).ConfigureAwait(false);
+                return string.IsNullOrWhiteSpace(output) ? error : output.Trim();
+            }
+            catch (OperationCanceledException)
+            {
+                TryKillProcess(process);
+                return "Execution Cancelled";
+            }
+        }
+        catch (Exception ex)
+        {
+            await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell Error] {script}\n{ex.Message}\n", CancellationToken.None).ConfigureAwait(false);
+            return "ERROR: " + ex.Message;
+        }
+    }
+
     private void dgFindings_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (dgFindings?.SelectedItem is not AdHealthFinding finding)
@@ -4417,45 +4566,6 @@ public partial class MainWindow : Window, IDisposable
         }
         catch { results.Add(new TestResult { Service = "SMB/LDAP Signing", Server = dc, Result = "FAIL", Message = "Signing check threw exception.", LogFilePath = logFilePath }); }
         return results;
-    }
-
-    private async Task<string> RunPowerShellScriptAsync(string script, string logFilePath, CancellationToken token)
-    {
-        try
-        {
-            using Process process = new();
-            process.StartInfo = new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script.Replace("\"", "\\\"")}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            process.Start();
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(token);
-            Task<string> errorTask = process.StandardError.ReadToEndAsync(token);
-
-            try
-            {
-                await process.WaitForExitAsync(token).ConfigureAwait(false);
-                string output = await outputTask.ConfigureAwait(false);
-                string error = await errorTask.ConfigureAwait(false);
-                await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell] {script}\n{output}\n{error}\n", token).ConfigureAwait(false);
-                return string.IsNullOrWhiteSpace(output) ? error : output.Trim();
-            }
-            catch (OperationCanceledException)
-            {
-                TryKillProcess(process);
-                return "Execution Cancelled";
-            }
-        }
-        catch (Exception ex)
-        {
-            await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell Error] {script}\n{ex.Message}\n", CancellationToken.None).ConfigureAwait(false);
-            return "ERROR: " + ex.Message;
-        }
     }
 
     private void ViewSelectedLog_Click(object sender, RoutedEventArgs e)
