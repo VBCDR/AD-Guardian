@@ -130,6 +130,7 @@ public partial class MainWindow : Window, IDisposable
     private string lastProgressTitle = string.Empty;
     private string lastProgressDetail = string.Empty;
     private bool isRunInProgress;
+    private bool isLogContentReady;
     private string lastEmailFingerprint = string.Empty;
     private DateTime lastEmailSentUtc = DateTime.MinValue;
     private static readonly TimeSpan ScheduledCollectorTimeout = TimeSpan.FromSeconds(30);
@@ -351,6 +352,7 @@ public partial class MainWindow : Window, IDisposable
         await WriteCombinedLogAsync(logFilePaths, combinedLogPath, token);
         latestLogsFilePath = combinedLogPath;
         latestLogsText = File.Exists(combinedLogPath) ? await File.ReadAllTextAsync(combinedLogPath, token).ConfigureAwait(true) : string.Empty;
+        isLogContentReady = true;
 
         if (!allResults.Any())
         {
@@ -441,13 +443,21 @@ public partial class MainWindow : Window, IDisposable
             ResultsTextBox.Text = results;
         }
 
-        if (MainTabControl.SelectedIndex == 5)
+        try
         {
-            LogsListBox.ItemsSource = GetCachedLogLines(results);
-            logsTextPending = false;
+            if (MainTabControl.SelectedIndex == 5)
+            {
+                LogsListBox.ItemsSource = GetCachedLogLines(results);
+                logsTextPending = false;
+            }
+            else
+            {
+                logsTextPending = true;
+            }
         }
-        else
+        catch (Exception ex)
         {
+            Debug.WriteLine($"DisplayTestResults log update failed: {ex.Message}");
             logsTextPending = true;
         }
 
@@ -603,6 +613,7 @@ public partial class MainWindow : Window, IDisposable
         SyncResultItems();
         latestLogsFilePath = logFilePath;
         latestLogsText = output;
+        isLogContentReady = true;
         DisplayTestResults(output);
         ForceRefreshDashboard();
         Debug.WriteLine($"Scheduled log '{Path.GetFileName(logFilePath)}' loaded in {loadStopwatch.ElapsedMilliseconds}ms.");
@@ -1451,6 +1462,7 @@ public partial class MainWindow : Window, IDisposable
         latestRunDetailsText = string.Empty;
         latestLogsText = string.Empty;
         latestLogsFilePath = string.Empty;
+        isLogContentReady = false;
         cachedLogLinesLength = -1;
         cachedLogLinesHash = 0;
         cachedLogLines = Array.Empty<LogLine>();
@@ -2315,6 +2327,7 @@ public partial class MainWindow : Window, IDisposable
         cancellationTokenSource = new CancellationTokenSource();
         CancellationToken token = cancellationTokenSource.Token;
         SetRunInProgress(true);
+        isLogContentReady = false;
         allResults.Clear();
         List<string> logFilePaths = new();
         RunLogSession runSession = CreateRunLogSession(runStartedAt, "Manual");
@@ -3411,11 +3424,22 @@ public partial class MainWindow : Window, IDisposable
                 latestLogsText = logsText;
             }
 
-            LogsListBox.ItemsSource = GetCachedLogLines(logsText);
-            LogsFileNameText.Text = string.IsNullOrWhiteSpace(latestLogsFilePath)
-                ? "Current summary view"
-                : Path.GetFileName(latestLogsFilePath);
-            RefreshLogSectionEntries(logsText, latestLogsFilePath);
+            if (string.IsNullOrWhiteSpace(logsText) && (isRunInProgress || !isLogContentReady))
+            {
+                LogsListBox.ItemsSource = new List<LogLine>
+                {
+                    new() { Text = "Logs are still being generated. Please wait for the test run to complete...", Foreground = Brushes.Gray, FontWeight = FontWeights.SemiBold }
+                };
+                LogsFileNameText.Text = "Waiting for logs...";
+            }
+            else
+            {
+                LogsListBox.ItemsSource = GetCachedLogLines(logsText);
+                LogsFileNameText.Text = string.IsNullOrWhiteSpace(latestLogsFilePath)
+                    ? "Current summary view"
+                    : Path.GetFileName(latestLogsFilePath);
+                RefreshLogSectionEntries(logsText, latestLogsFilePath);
+            }
             logsTextPending = false;
         }
         catch (Exception ex)
@@ -4582,7 +4606,14 @@ public partial class MainWindow : Window, IDisposable
             List<TestResult> validResults = selected.Where(r => !string.IsNullOrWhiteSpace(r.LogFilePath) && File.Exists(r.LogFilePath)).ToList();
             if (validResults.Count == 0)
             {
-                NotificationService.Show(this, "Log Not Found", "No log files found for the selected results.", isError: true);
+                if (isRunInProgress || !isLogContentReady)
+                {
+                    NotificationService.Show(this, "Logs Still Loading", "Log files are still being written. Please wait for the test run to complete, then try again.");
+                }
+                else
+                {
+                    NotificationService.Show(this, "Log Not Found", "No log files found for the selected results.", isError: true);
+                }
                 return;
             }
 
