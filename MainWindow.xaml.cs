@@ -443,21 +443,13 @@ public partial class MainWindow : Window, IDisposable
             ResultsTextBox.Text = results;
         }
 
-        try
+        if (MainTabControl.SelectedIndex == 5)
         {
-            if (MainTabControl.SelectedIndex == 5)
-            {
-                LogsListBox.ItemsSource = GetCachedLogLines(results);
-                logsTextPending = false;
-            }
-            else
-            {
-                logsTextPending = true;
-            }
+            LogsListBox.ItemsSource = GetCachedLogLines(results);
+            logsTextPending = false;
         }
-        catch (Exception ex)
+        else
         {
-            Debug.WriteLine($"DisplayTestResults log update failed: {ex.Message}");
             logsTextPending = true;
         }
 

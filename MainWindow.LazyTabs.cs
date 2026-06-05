@@ -60,7 +60,10 @@ public partial class MainWindow
         if (_LogsTab == null)
         {
             _LogsTab = new LogsTabPage();
-            LogsTabHost.Content = _LogsTab;
+            if (LogsTabHost != null)
+            {
+                LogsTabHost.Content = _LogsTab;
+            }
         }
         return _LogsTab;
     }

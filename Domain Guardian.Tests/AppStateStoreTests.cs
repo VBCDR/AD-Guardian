@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using AdHealthMonitor;
 using Xunit;
 
@@ -484,5 +487,236 @@ public class AppStateStoreTests : IDisposable
 
         Assert.NotNull(loaded);
         Assert.Equal(10000, loaded.LastRunSummary.Length);
+    }
+
+    // ── Special characters ────────────────────────────────────────────────
+
+    [Fact]
+    public void SaveSettings_SpecialCharacters_Roundtrips()
+    {
+        var store = CreateStore();
+        var original = new PersistedAppSettings
+        {
+            DomainControllers = "dc\"01\".corp.local, dc\\02",
+            RecipientEmail = "admin+josé@corp.local"
+        };
+
+        store.SaveSettings(original);
+        var loaded = store.LoadSettings();
+
+        Assert.Equal(original.DomainControllers, loaded.DomainControllers);
+        Assert.Equal(original.RecipientEmail, loaded.RecipientEmail);
+    }
+
+    [Fact]
+    public void SaveSettings_UnicodePath_Roundtrips()
+    {
+        var store = CreateStore();
+        var original = new PersistedAppSettings
+        {
+            DomainControllers = "东京.corp.local, Zürich.dc"
+        };
+
+        store.SaveSettings(original);
+        var loaded = store.LoadSettings();
+
+        Assert.Equal("东京.corp.local, Zürich.dc", loaded.DomainControllers);
+    }
+
+    [Fact]
+    public void SaveHistory_SpecialCharactersInPaths_Roundtrips()
+    {
+        var store = CreateStore();
+        var entries = new List<TestHistoryEntry>
+        {
+            new()
+            {
+                RunDate = DateTime.Now,
+                Total = 1,
+                Passed = 1,
+                LogFilePath = @"C:\Users\José García\logs\run with spaces.log",
+                Details = "Test with \"quotes\" and \\backslashes\\"
+            },
+            new()
+            {
+                RunDate = DateTime.Now,
+                Total = 1,
+                Passed = 1,
+                LogFilePath = @"C:\logs\测试\日本語.log",
+                Details = "Unicode: café résumé naïve"
+            }
+        };
+
+        store.SaveHistory(entries);
+        var loaded = store.LoadHistory();
+
+        Assert.Equal(2, loaded.Count);
+        var allLogPaths = loaded.Select(e => e.LogFilePath).ToList();
+        var allDetails = loaded.Select(e => e.Details).ToList();
+        Assert.Contains(allLogPaths, p => p.Contains("José García"));
+        Assert.Contains(allLogPaths, p => p.Contains("日本語"));
+        Assert.Contains(allDetails, d => d.Contains("quotes"));
+        Assert.Contains(allDetails, d => d.Contains("café résumé"));
+    }
+
+    // ── DateTime kind preservation ────────────────────────────────────────
+
+    [Fact]
+    public void SaveHistory_LocalDateTime_PreservesTicksOnLoad()
+    {
+        var store = CreateStore();
+        var localDate = new DateTime(2025, 6, 1, 14, 30, 0, DateTimeKind.Local);
+        var entries = new List<TestHistoryEntry>
+        {
+            new() { RunDate = localDate, Total = 1, Passed = 1 }
+        };
+
+        store.SaveHistory(entries);
+        var loaded = store.LoadHistory();
+
+        Assert.Single(loaded);
+        Assert.Equal(localDate.Ticks, loaded[0].RunDate.Ticks);
+        Assert.Equal(DateTimeKind.Local, loaded[0].RunDate.Kind);
+    }
+
+    [Fact]
+    public void SaveHistory_UtcDateTime_LoadsAsLocal()
+    {
+        var store = CreateStore();
+        var utcDate = new DateTime(2025, 6, 1, 14, 30, 0, DateTimeKind.Utc);
+        var entries = new List<TestHistoryEntry>
+        {
+            new() { RunDate = utcDate, Total = 1, Passed = 1 }
+        };
+
+        store.SaveHistory(entries);
+        var loaded = store.LoadHistory();
+
+        Assert.Single(loaded);
+        // Store preserves ticks, but reconstructs as Local kind
+        Assert.Equal(utcDate.Ticks, loaded[0].RunDate.Ticks);
+        Assert.Equal(DateTimeKind.Local, loaded[0].RunDate.Kind);
+    }
+
+    [Fact]
+    public void SaveDashboardSnapshot_UtcDateTime_PreservesTicks()
+    {
+        var store = CreateStore();
+        var utcDate = new DateTime(2025, 12, 31, 23, 59, 59, DateTimeKind.Utc);
+        var snapshot = new DashboardSnapshot { CapturedAtUtc = utcDate, HealthScore = 77 };
+
+        store.SaveDashboardSnapshot(snapshot);
+        var loaded = store.LoadDashboardSnapshot();
+
+        Assert.NotNull(loaded);
+        Assert.Equal(utcDate.Ticks, loaded.CapturedAtUtc.Ticks);
+        Assert.Equal(77, loaded.HealthScore);
+    }
+
+    // ── Concurrent access ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ConcurrentWrites_DoNotCorruptDatabase()
+    {
+        var store = CreateStore();
+        store.Initialize();
+
+        var tasks = new List<Task>();
+        for (int i = 0; i < 10; i++)
+        {
+            int taskId = i;
+            tasks.Add(Task.Run(() =>
+            {
+                store.SaveHistory(new List<TestHistoryEntry>
+                {
+                    new()
+                    {
+                        RunDate = DateTime.Now,
+                        Total = taskId,
+                        Passed = taskId,
+                        Details = $"Concurrent write {taskId}"
+                    }
+                });
+            }));
+        }
+
+        await Task.WhenAll(tasks);
+
+        // Should not throw and should return valid data
+        var loaded = store.LoadHistory();
+        Assert.NotNull(loaded);
+        Assert.NotEmpty(loaded); // SaveHistory overwrites, concurrent writes may leave 1+ entries
+    }
+
+    [Fact]
+    public async Task ConcurrentReadAndWrite_DoNotThrow()
+    {
+        var store = CreateStore();
+        store.Initialize();
+
+        // Seed initial data
+        store.SaveHistory(new List<TestHistoryEntry>
+        {
+            new() { RunDate = DateTime.Now, Total = 5, Passed = 5, Details = "seed" }
+        });
+
+        var tasks = new List<Task>();
+        for (int i = 0; i < 10; i++)
+        {
+            int taskId = i;
+            tasks.Add(Task.Run(() =>
+            {
+                // Mix reads and writes
+                if (taskId % 2 == 0)
+                {
+                    store.SaveHistory(new List<TestHistoryEntry>
+                    {
+                        new() { RunDate = DateTime.Now, Total = taskId, Passed = taskId, Details = $"write {taskId}" }
+                    });
+                }
+                else
+                {
+                    var history = store.LoadHistory();
+                    Assert.NotNull(history);
+                }
+            }));
+        }
+
+        await Task.WhenAll(tasks);
+
+        // Verify final state is consistent (may be 1+ entries due to concurrent DELETE+INSERT)
+        var final = store.LoadHistory();
+        Assert.NotNull(final);
+        Assert.NotEmpty(final);
+    }
+
+    [Fact]
+    public async Task ConcurrentSettingsAccess_DoNotThrow()
+    {
+        var store = CreateStore();
+        store.Initialize();
+
+        var tasks = new List<Task>();
+        for (int i = 0; i < 10; i++)
+        {
+            int taskId = i;
+            tasks.Add(Task.Run(() =>
+            {
+                if (taskId % 2 == 0)
+                {
+                    store.SaveSettings(new PersistedAppSettings { DomainControllers = $"dc{taskId}" });
+                }
+                else
+                {
+                    var settings = store.LoadSettings();
+                    Assert.NotNull(settings);
+                }
+            }));
+        }
+
+        await Task.WhenAll(tasks);
+
+        var final = store.LoadSettings();
+        Assert.NotNull(final);
     }
 }
