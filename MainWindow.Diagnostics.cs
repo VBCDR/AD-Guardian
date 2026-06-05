@@ -813,27 +813,44 @@ public partial class MainWindow
         return results;
     }
 
+    internal static bool EvaluateTimeSkewResult(string output)
+    {
+        bool hasFailed = output.Contains("FAILED", StringComparison.OrdinalIgnoreCase);
+        bool hasErrorCode = output.Contains("error code", StringComparison.OrdinalIgnoreCase);
+        bool hasLastError = output.Contains("last error", StringComparison.OrdinalIgnoreCase);
+        bool hasActualError = output.Contains("has an error", StringComparison.OrdinalIgnoreCase);
+        bool hasSpecificError = hasFailed || hasErrorCode || hasLastError || hasActualError;
+
+        return !hasSpecificError &&
+               (output.Contains("offset", StringComparison.OrdinalIgnoreCase) ||
+                output.Contains("RefID", StringComparison.OrdinalIgnoreCase));
+    }
+
     private async Task<List<TestResult>> RunTimeSkewCheckAsync(string dc, string logFilePath, CancellationToken token)
     {
         List<TestResult> results = new();
         try
         {
             string output = await RunCommandAsync($"w32tm /monitor /computers:{dc}", logFilePath, token);
-
-            bool hasFailed = output.Contains("FAILED", StringComparison.OrdinalIgnoreCase);
-            bool hasErrorCode = output.Contains("error code", StringComparison.OrdinalIgnoreCase);
-            bool hasLastError = output.Contains("last error", StringComparison.OrdinalIgnoreCase);
-            bool hasActualError = output.Contains("has an error", StringComparison.OrdinalIgnoreCase);
-            bool hasSpecificError = hasFailed || hasErrorCode || hasLastError || hasActualError;
-
-            bool passed = !hasSpecificError &&
-                          (output.Contains("offset", StringComparison.OrdinalIgnoreCase) ||
-                           output.Contains("RefID", StringComparison.OrdinalIgnoreCase));
-
+            bool passed = EvaluateTimeSkewResult(output);
             results.Add(new TestResult { Service = "Time Skew", Server = dc, Result = passed ? "PASS" : "FAIL", Message = passed ? "Time sync OK." : "Time skew detected or w32tm error.", LogFilePath = logFilePath });
         }
         catch { results.Add(new TestResult { Service = "Time Skew", Server = dc, Result = "FAIL", Message = "Time sync check failed.", LogFilePath = logFilePath }); }
         return results;
+    }
+
+    internal static bool EvaluateLdapBindResult(string output)
+    {
+        return output.Contains("LDAP_OK", StringComparison.OrdinalIgnoreCase) &&
+               !output.Contains("LDAP_FAIL", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string BuildLdapBindMessage(string output, bool passed)
+    {
+        if (passed) return "LDAP bind succeeded.";
+        return output.Contains("LDAP_FAIL", StringComparison.OrdinalIgnoreCase)
+            ? output.Trim()
+            : "LDAP bind failed.";
     }
 
     private async Task<List<TestResult>> RunLdapBindCheckAsync(string dc, string logFilePath, CancellationToken token)
@@ -845,13 +862,8 @@ public partial class MainWindow
                 "$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " +
                 $"try {{ $root = [ADSI]\"LDAP://{dc}\"; $dn = $root.distinguishedName; Write-Output \"LDAP_OK: $dn\" }} catch {{ Write-Output \"LDAP_FAIL: $($_.Exception.Message)\" }}";
             string output = await RunPowerShellScriptAsync(script, logFilePath, token);
-            bool passed = output.Contains("LDAP_OK", StringComparison.OrdinalIgnoreCase) &&
-                          !output.Contains("LDAP_FAIL", StringComparison.OrdinalIgnoreCase);
-            string message = passed
-                ? "LDAP bind succeeded."
-                : output.Contains("LDAP_FAIL", StringComparison.OrdinalIgnoreCase)
-                    ? output.Trim()
-                    : "LDAP bind failed.";
+            bool passed = EvaluateLdapBindResult(output);
+            string message = BuildLdapBindMessage(output, passed);
             results.Add(new TestResult { Service = "LDAP Bind", Server = dc, Result = passed ? "PASS" : "FAIL", Message = message, LogFilePath = logFilePath });
         }
         catch { results.Add(new TestResult { Service = "LDAP Bind", Server = dc, Result = "FAIL", Message = "LDAP bind threw exception.", LogFilePath = logFilePath }); }
@@ -873,6 +885,20 @@ public partial class MainWindow
         return results;
     }
 
+    internal static bool EvaluateSmbResult(string output)
+    {
+        return output.Contains("SMB_OK", StringComparison.OrdinalIgnoreCase) &&
+               !output.Contains("SMB_FAIL", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string BuildSmbMessage(string output, bool passed)
+    {
+        if (passed) return "Server service running.";
+        return output.Contains("SMB_FAIL", StringComparison.OrdinalIgnoreCase)
+            ? output.Trim()
+            : "Server service not running.";
+    }
+
     private async Task<List<TestResult>> RunSmbLdapSigningCheckAsync(string dc, string logFilePath, CancellationToken token)
     {
         List<TestResult> results = new();
@@ -881,13 +907,8 @@ public partial class MainWindow
             string script =
                 $"try {{ $s = Get-Service -ComputerName {dc} -Name LanmanServer -ErrorAction Stop; if ($s.Status -eq 'Running') {{ 'SMB_OK' }} else {{ 'SMB_STATUS=' + $s.Status }} }} catch {{ Write-Output \"SMB_FAIL: $($_.Exception.Message)\" }}";
             string output = await RunPowerShellScriptAsync(script, logFilePath, token);
-            bool passed = output.Contains("SMB_OK", StringComparison.OrdinalIgnoreCase) &&
-                          !output.Contains("SMB_FAIL", StringComparison.OrdinalIgnoreCase);
-            string message = passed
-                ? "Server service running."
-                : output.Contains("SMB_FAIL", StringComparison.OrdinalIgnoreCase)
-                    ? output.Trim()
-                    : "Server service not running.";
+            bool passed = EvaluateSmbResult(output);
+            string message = BuildSmbMessage(output, passed);
             results.Add(new TestResult { Service = "SMB/LDAP Signing", Server = dc, Result = passed ? "PASS" : "FAIL", Message = message, LogFilePath = logFilePath });
         }
         catch { results.Add(new TestResult { Service = "SMB/LDAP Signing", Server = dc, Result = "FAIL", Message = "Signing check threw exception.", LogFilePath = logFilePath }); }
