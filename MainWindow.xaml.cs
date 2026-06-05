@@ -113,6 +113,13 @@ public partial class MainWindow : Window, IDisposable
     private bool suppressLogsFilterEvents;
     private bool suppressLogsWorkspaceRefresh;
     private bool schedulerTasksLoaded;
+    private bool healthPageBound;
+    private bool findingsPageBound;
+    private bool historyPageBound;
+    private bool logsPageBound;
+    private bool securityPageBound;
+    private bool schedulerPageBound;
+    private bool healthDetailsTextPending;
     private Task? startupInitializationTask;
     private int cachedLogLinesHash;
     private int cachedLogLinesLength = -1;
@@ -184,6 +191,16 @@ public partial class MainWindow : Window, IDisposable
     {
         await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
         await InitializeAppStateAsync(startupStopwatch).ConfigureAwait(true);
+        await PrewarmPriorityPagesAsync().ConfigureAwait(true);
+    }
+
+    private async Task PrewarmPriorityPagesAsync()
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            EnsurePageBindings(1);
+            EnsurePageBindings(2);
+        }, DispatcherPriority.ApplicationIdle);
     }
 
     private async Task RunScheduledTestsAsync(string scheduledTaskName)
@@ -327,7 +344,17 @@ public partial class MainWindow : Window, IDisposable
         {
             latestLogsText = results;
         }
-        ResultsTextBox.Text = results;
+
+        healthDetailsTextPending = MainTabControl.SelectedIndex != 1;
+        if (healthDetailsTextPending)
+        {
+            ResultsTextBox.Clear();
+        }
+        else
+        {
+            ResultsTextBox.Text = results;
+        }
+
         if (MainTabControl.SelectedIndex == 5)
         {
             LogsListBox.ItemsSource = GetCachedLogLines(results);
@@ -342,6 +369,18 @@ public partial class MainWindow : Window, IDisposable
         UpdateHealthResultsLayout();
         UpdateHealthSummaryText();
         Activate();
+    }
+
+    private void EnsureHealthDetailsTextLoaded()
+    {
+        if (!healthDetailsTextPending)
+        {
+            return;
+        }
+
+        ResultsTextBox.Text = latestRunDetailsText;
+        healthDetailsTextPending = false;
+        UpdateHealthResultsLayout();
     }
 
     private void UpdateHealthResultsLayout()
@@ -918,13 +957,38 @@ public partial class MainWindow : Window, IDisposable
         findingItemsView = CollectionViewSource.GetDefaultView(findingItems);
         findingItemsView.Filter = FindingItemsFilter;
 
-        testResultsGrid.ItemsSource = resultItemsView;
-        dgLogsEntries.ItemsSource = logResultItemsView;
-        dgTestHistory.ItemsSource = historyItemsView;
-        dgFindings.ItemsSource = findingItemsView;
-        dgSecurityFindings.ItemsSource = securityFindingItems;
-        SchedulerTaskList.ItemsSource = scheduledTasks;
         InitializeLogsFilters();
+    }
+
+    private void EnsurePageBindings(int pageIndex)
+    {
+        switch (pageIndex)
+        {
+            case 1 when !healthPageBound:
+                testResultsGrid.ItemsSource = resultItemsView;
+                healthPageBound = true;
+                break;
+            case 2 when !findingsPageBound:
+                dgFindings.ItemsSource = findingItemsView;
+                findingsPageBound = true;
+                break;
+            case 4 when !historyPageBound:
+                dgTestHistory.ItemsSource = historyItemsView;
+                historyPageBound = true;
+                break;
+            case 5 when !logsPageBound:
+                dgLogsEntries.ItemsSource = logResultItemsView;
+                logsPageBound = true;
+                break;
+            case 6 when !securityPageBound:
+                dgSecurityFindings.ItemsSource = securityFindingItems;
+                securityPageBound = true;
+                break;
+            case 8 when !schedulerPageBound:
+                SchedulerTaskList.ItemsSource = scheduledTasks;
+                schedulerPageBound = true;
+                break;
+        }
     }
 
     private async void DashboardRefreshTimer_Tick(object? sender, EventArgs e)
@@ -1293,6 +1357,7 @@ public partial class MainWindow : Window, IDisposable
         SyncResultItems();
         SyncFindingItems();
         ResultsTextBox.Clear();
+        healthDetailsTextPending = false;
         LogsListBox.ItemsSource = null;
         latestRunDetailsText = string.Empty;
         latestLogsText = string.Empty;
@@ -1303,11 +1368,11 @@ public partial class MainWindow : Window, IDisposable
         logsTextPending = false;
         dgLogsEntries.SelectedItem = null;
         DetailsPanel.Visibility = Visibility.Collapsed;
-        testResultsGrid.ItemsSource = null;
-        dgLogsEntries.ItemsSource = null;
-        dgTestHistory.ItemsSource = null;
-        dgFindings.ItemsSource = null;
-        dgSecurityFindings.ItemsSource = null;
+        if (healthPageBound) testResultsGrid.ItemsSource = resultItemsView;
+        if (logsPageBound) dgLogsEntries.ItemsSource = logResultItemsView;
+        if (historyPageBound) dgTestHistory.ItemsSource = historyItemsView;
+        if (findingsPageBound) dgFindings.ItemsSource = findingItemsView;
+        if (securityPageBound) dgSecurityFindings.ItemsSource = securityFindingItems;
         UpdateHealthResultsLayout();
         UpdateHealthSummaryText();
         HideRunProgress();
@@ -1841,16 +1906,22 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        int selectedIndex = MainTabControl.SelectedIndex;
+        EnsurePageBindings(selectedIndex);
         UpdateNavigationState();
-        if (MainTabControl.SelectedIndex == 7)
+        if (selectedIndex == 1)
+        {
+            EnsureHealthDetailsTextLoaded();
+        }
+        else if (selectedIndex == 7)
         {
             LoadSettingsIntoPage();
         }
-        else if (MainTabControl.SelectedIndex == 5 && logsTextPending)
+        else if (selectedIndex == 5 && logsTextPending)
         {
             _ = LoadLogsTabContentAsync();
         }
-        else if (MainTabControl.SelectedIndex == 8)
+        else if (selectedIndex == 8)
         {
             RefreshSchedulerTaskList();
         }
@@ -1867,7 +1938,7 @@ public partial class MainWindow : Window, IDisposable
             content.BeginAnimation(UIElement.OpacityProperty, fadeIn);
         }
 
-        if (MainTabControl.SelectedIndex == 5)
+        if (selectedIndex == 5)
         {
             RefreshLogsWorkspace();
         }
