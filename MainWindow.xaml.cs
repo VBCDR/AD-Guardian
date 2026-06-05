@@ -769,11 +769,11 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void dpHistoryFilter_SelectedDateChanged(object sender, SelectionChangedEventArgs e) => ApplyHistoryFilter();
+    internal void dpHistoryFilter_SelectedDateChanged(object sender, SelectionChangedEventArgs e) => ApplyHistoryFilter();
 
-    private void txtHistorySearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyHistoryFilter();
+    internal void txtHistorySearch_TextChanged(object sender, TextChangedEventArgs e) => ApplyHistoryFilter();
 
-    private void ClearHistoryFilters_Click(object sender, RoutedEventArgs e)
+    internal void ClearHistoryFilters_Click(object sender, RoutedEventArgs e)
     {
         dpHistoryFilter.SelectedDate = null;
         txtHistorySearch.Text = string.Empty;
@@ -782,7 +782,7 @@ public partial class MainWindow : Window, IDisposable
 
     private void ApplyHistoryFilter() => historyItemsView?.Refresh();
 
-    private async void ViewSelectedHistoryRun_Click(object sender, RoutedEventArgs e)
+    internal async void ViewSelectedHistoryRun_Click(object sender, RoutedEventArgs e)
     {
         TestHistoryEntry? entry = dgTestHistory.SelectedItems
             .OfType<TestHistoryEntry>()
@@ -806,7 +806,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private async void DeleteSelectedHistory_Click(object sender, RoutedEventArgs e)
+    internal async void DeleteSelectedHistory_Click(object sender, RoutedEventArgs e)
     {
         List<TestHistoryEntry> selectedEntries = dgTestHistory.SelectedItems
             .OfType<TestHistoryEntry>()
@@ -840,7 +840,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void dgTestHistory_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    internal void dgTestHistory_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         CompareRunsButton.IsEnabled = dgTestHistory.SelectedItems.Count == 2;
         ViewSelectedRunButton.IsEnabled = dgTestHistory.SelectedItems.Count == 1 ||
@@ -923,7 +923,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void DataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    internal void DataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateSelectAllCheckbox((DataGrid)sender);
         UpdateActionButtonStates();
@@ -937,7 +937,7 @@ public partial class MainWindow : Window, IDisposable
         headerCb.IsChecked = dg.SelectedItems.Count > 0 && dg.SelectedItems.Count == dg.Items.Count;
     }
 
-    private void SelectAllCheckBox_Checked(object sender, RoutedEventArgs e)
+    internal void SelectAllCheckBox_Checked(object sender, RoutedEventArgs e)
     {
         if (sender is CheckBox cb)
         {
@@ -946,7 +946,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void SelectAllCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    internal void SelectAllCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
         if (sender is CheckBox cb)
         {
@@ -955,7 +955,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void RowCheckBox_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    internal void RowCheckBox_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is CheckBox cb)
         {
@@ -968,7 +968,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void RowCheckBox_Checked(object sender, RoutedEventArgs e)
+    internal void RowCheckBox_Checked(object sender, RoutedEventArgs e)
     {
         if (sender is CheckBox cb)
         {
@@ -977,7 +977,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void RowCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    internal void RowCheckBox_Unchecked(object sender, RoutedEventArgs e)
     {
         if (sender is CheckBox cb)
         {
@@ -997,7 +997,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void DataGrid_CellPreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    internal void DataGrid_CellPreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         DependencyObject? source = e.OriginalSource as DependencyObject;
         if (source == null) return;
@@ -1363,7 +1363,7 @@ public partial class MainWindow : Window, IDisposable
                (result.Message?.ToLowerInvariant().Contains(searchText) ?? false);
     }
 
-    private void CompareRuns_Click(object sender, RoutedEventArgs e)
+    internal void CompareRuns_Click(object sender, RoutedEventArgs e)
     {
         if (dgTestHistory.SelectedItems.Count != 2)
         {
@@ -1437,7 +1437,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void ClearResults_Click(object sender, RoutedEventArgs e)
+    internal void ClearResults_Click(object sender, RoutedEventArgs e)
     {
         allResults.Clear();
         allFindings.Clear();
@@ -1468,7 +1468,7 @@ public partial class MainWindow : Window, IDisposable
         RefreshDashboard();
     }
 
-    private async void ExportButton_Click(object sender, RoutedEventArgs e)
+    internal async void ExportButton_Click(object sender, RoutedEventArgs e)
     {
         if (allResults.Count == 0)
         {
@@ -1501,7 +1501,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private async void ExecutiveSummary_Click(object sender, RoutedEventArgs e)
+    internal async void ExecutiveSummary_Click(object sender, RoutedEventArgs e)
     {
         if (allResults.Count == 0)
         {
@@ -1608,7 +1608,7 @@ public partial class MainWindow : Window, IDisposable
         schedulerSelectedTaskIndex = -1;
     }
 
-    private void SchedulerTaskList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    internal void SchedulerTaskList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateSelectAllCheckbox(SchedulerTaskList);
 
@@ -1674,7 +1674,7 @@ public partial class MainWindow : Window, IDisposable
         WindowsTaskSchedulerInterop.DeleteTask(task.TaskName);
     }
 
-    private async void SchedulerSaveButton_Click(object sender, RoutedEventArgs e)
+    internal async void SchedulerSaveButton_Click(object sender, RoutedEventArgs e)
     {
         string taskName = SchedulerTaskName.Text.Trim();
         List<string> dcEntries = SchedulerDomainControllers.Text.Trim()
@@ -1746,7 +1746,7 @@ public partial class MainWindow : Window, IDisposable
         ClearSchedulerInputFields();
     }
 
-    private async void SchedulerRemoveButton_Click(object sender, RoutedEventArgs e)
+    internal async void SchedulerRemoveButton_Click(object sender, RoutedEventArgs e)
     {
         if (SchedulerTaskList.SelectedIndex >= 0)
         {
@@ -1842,7 +1842,7 @@ public partial class MainWindow : Window, IDisposable
         SettingsChkEmailScheduled.IsChecked = sendEmailScheduled;
     }
 
-    private void SettingsSaveButton_Click(object sender, RoutedEventArgs e)
+    internal void SettingsSaveButton_Click(object sender, RoutedEventArgs e)
     {
         domainControllers = SettingsDcTextBox.Text.Trim();
         recipientEmail = SettingsEmailTextBox.Text.Trim();
@@ -1866,7 +1866,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private async void TestEmailButton_Click(object sender, RoutedEventArgs e)
+    internal async void TestEmailButton_Click(object sender, RoutedEventArgs e)
     {
         string recipient = SettingsEmailTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(recipient))
@@ -1898,14 +1898,14 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplySearchFilter();
+    internal void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplySearchFilter();
 
-    private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
+    internal void SearchBox_GotFocus(object sender, RoutedEventArgs e)
     {
         SearchPlaceholder.Visibility = Visibility.Collapsed;
     }
 
-    private void SearchBox_LostFocus(object sender, RoutedEventArgs e)
+    internal void SearchBox_LostFocus(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(SearchBox.Text))
         {
@@ -1913,7 +1913,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void SearchButton_Click(object sender, RoutedEventArgs e) => ApplySearchFilter();
+    internal void SearchButton_Click(object sender, RoutedEventArgs e) => ApplySearchFilter();
 
     private async Task NavigateToSectionAsync(int index)
     {
@@ -1931,7 +1931,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void FindingsSearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyFindingsFilter();
+    internal void FindingsSearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyFindingsFilter();
 
     private async void NavSectionButton_Click(object sender, RoutedEventArgs e)
     {
@@ -2173,7 +2173,7 @@ public partial class MainWindow : Window, IDisposable
         resultItemsView?.Refresh();
     }
 
-    private void StopButton_Click(object sender, RoutedEventArgs e)
+    internal void StopButton_Click(object sender, RoutedEventArgs e)
     {
         cancellationTokenSource?.Cancel();
         UpdateActionButtonStates();
@@ -2259,7 +2259,7 @@ public partial class MainWindow : Window, IDisposable
         return GetManagedRunDirectoryPath(logFilePath) != null;
     }
 
-    private async void RunButton_Click(object sender, RoutedEventArgs e)
+    internal async void RunButton_Click(object sender, RoutedEventArgs e)
     {
         if (isRunInProgress)
         {
@@ -3866,13 +3866,13 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void LogsSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    internal void LogsSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         RefreshLogsView();
         UpdateLogsWorkspaceSummary();
     }
 
-    private void LogsFilter_Changed(object sender, SelectionChangedEventArgs e)
+    internal void LogsFilter_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded || suppressLogsFilterEvents || suppressLogsWorkspaceRefresh)
         {
@@ -3883,7 +3883,7 @@ public partial class MainWindow : Window, IDisposable
         UpdateLogsWorkspaceSummary();
     }
 
-    private void ClearLogsFilters_Click(object sender, RoutedEventArgs e)
+    internal void ClearLogsFilters_Click(object sender, RoutedEventArgs e)
     {
         LogsSearchBox.Text = string.Empty;
         LogsDcFilter.SelectedIndex = 0;
@@ -3893,12 +3893,12 @@ public partial class MainWindow : Window, IDisposable
         UpdateLogsWorkspaceSummary();
     }
 
-    private async void BackToHealth_Click(object sender, RoutedEventArgs e)
+    internal async void BackToHealth_Click(object sender, RoutedEventArgs e)
     {
         await NavigateToSectionAsync(1).ConfigureAwait(true);
     }
 
-    private void ShowFullLog_Click(object sender, RoutedEventArgs e)
+    internal void ShowFullLog_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(latestLogsFilePath) || !File.Exists(latestLogsFilePath))
         {
@@ -3909,7 +3909,7 @@ public partial class MainWindow : Window, IDisposable
         ShowLogFileInLogsTab(latestLogsFilePath);
     }
 
-    private async void OpenLogFile_Click(object sender, RoutedEventArgs e)
+    internal async void OpenLogFile_Click(object sender, RoutedEventArgs e)
     {
         string runsRoot = GetRunsRootDirectoryPath();
         if (!Directory.Exists(runsRoot))
@@ -3952,7 +3952,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private async void dgLogsEntries_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    internal async void dgLogsEntries_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (dgLogsEntries.SelectedItem is TestResult)
         {
@@ -3964,7 +3964,7 @@ public partial class MainWindow : Window, IDisposable
             JumpToSelectedLogEntry();
         }
     }
-    private void PopOutLogViewer_Click(object sender, RoutedEventArgs e)
+    internal void PopOutLogViewer_Click(object sender, RoutedEventArgs e)
     {
         string title = "Raw Log Evidence";
         if (!string.IsNullOrWhiteSpace(latestLogsFilePath))
@@ -4465,7 +4465,7 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void dgFindings_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    internal void dgFindings_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (dgFindings?.SelectedItem is not AdHealthFinding finding)
         {
@@ -4486,7 +4486,7 @@ public partial class MainWindow : Window, IDisposable
         UpdateActionButtonStates();
     }
 
-    private void OpenFindingLog_Click(object sender, RoutedEventArgs e)
+    internal void OpenFindingLog_Click(object sender, RoutedEventArgs e)
     {
         if (dgFindings?.SelectedItem is not AdHealthFinding finding ||
             string.IsNullOrWhiteSpace(finding.LogFilePath) ||
@@ -4568,7 +4568,7 @@ public partial class MainWindow : Window, IDisposable
         return results;
     }
 
-    private void ViewSelectedLog_Click(object sender, RoutedEventArgs e)
+    internal void ViewSelectedLog_Click(object sender, RoutedEventArgs e)
     {
         try
         {

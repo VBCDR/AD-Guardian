@@ -30,14 +30,23 @@
                                                Foreground="{StaticResource BodyBrush}"/>
                                 </StackPanel>
                                 <Button Grid.Column="1"
-                                        Content="Back to Health"
                                         Style="{StaticResource RoundedButtonStyle}"
                                         Background="#607D8B"
-                                        Width="126"
+                                        Width="138"
                                         Height="38"
                                         Margin="16,0,0,0"
                                         VerticalAlignment="Center"
-                                        Click="BackToHealth_Click"/>
+                                        Click="BackToHealth_Click">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE72B;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="14"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,7,0"/>
+                                        <TextBlock Text="Back to Health"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </Grid>
                         </Border>
 

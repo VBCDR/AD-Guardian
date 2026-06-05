@@ -29,4 +29,11 @@
   <ItemGroup>
     <Resource Include="AD-Guardian-logo-_2_.ico"/>
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Domain Guardian.Tests\**" />
+    <None Remove="Domain Guardian.Tests\**" />
+    <Content Remove="Domain Guardian.Tests\**" />
+    <Page Remove="Domain Guardian.Tests\**" />
+  </ItemGroup>
 </Project>

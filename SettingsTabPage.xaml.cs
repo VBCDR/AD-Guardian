@@ -9,10 +9,6 @@ public partial class SettingsTabPage : UserControl
     {
         if (System.Windows.Window.GetWindow(this) is MainWindow mw) mw.TestEmailButton_Click(sender, e);
     }
-    private void True(object sender, System.Windows.RoutedEventArgs e)
-    {
-        if (System.Windows.Window.GetWindow(this) is MainWindow mw) mw.True(sender, e);
-    }
     private void SettingsSaveButton_Click(object sender, System.Windows.RoutedEventArgs e)
     {
         if (System.Windows.Window.GetWindow(this) is MainWindow mw) mw.SettingsSaveButton_Click(sender, e);
