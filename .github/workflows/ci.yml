@@ -36,4 +36,4 @@ jobs:
         run: dotnet build "AD Guardian.sln" --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test "Domain Guardian.Tests/Domain Guardian.Tests.csproj" --configuration Release --no-build --verbosity normal
+        run: dotnet test "Domain Guardian.Tests/Domain Guardian.Tests.csproj" --configuration Release --no-restore --verbosity normal

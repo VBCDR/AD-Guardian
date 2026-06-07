@@ -5,6 +5,8 @@ VisualStudioVersion = 17.13.35825.156 d17.13
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain Guardian", "Domain Guardian.csproj", "{2731953A-D928-468E-F1AF-E271223BC814}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain Guardian.Tests", "Domain Guardian.Tests\Domain Guardian.Tests.csproj", "{50694732-238E-44DE-8FD4-6CBDAEF0CF3F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{2731953A-D928-468E-F1AF-E271223BC814}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2731953A-D928-468E-F1AF-E271223BC814}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2731953A-D928-468E-F1AF-E271223BC814}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50694732-238E-44DE-8FD4-6CBDAEF0CF3F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50694732-238E-44DE-8FD4-6CBDAEF0CF3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50694732-238E-44DE-8FD4-6CBDAEF0CF3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50694732-238E-44DE-8FD4-6CBDAEF0CF3F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
