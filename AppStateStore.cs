@@ -15,6 +15,7 @@ public sealed class AppStateStore
     private const string SchedulerTasksRowId = "schedulerTasks";
     private static readonly object InitializationLock = new();
     private static readonly HashSet<string> InitializedDatabasePaths = new(StringComparer.OrdinalIgnoreCase);
+    private static volatile bool anyDatabaseInitialized; // Fast-path: skip lock after first init
     private readonly string databasePath;
 
     public AppStateStore(string databasePath)
@@ -31,6 +32,20 @@ public sealed class AppStateStore
 
     public void Initialize()
     {
+        // Fast-path: after any database is initialized, check without lock.
+        // This avoids lock contention on every public method call after first init.
+        if (anyDatabaseInitialized)
+        {
+            string normalized = Path.GetFullPath(databasePath);
+            lock (InitializationLock)
+            {
+                if (InitializedDatabasePaths.Contains(normalized))
+                {
+                    return;
+                }
+            }
+        }
+
         string normalizedDatabasePath = Path.GetFullPath(databasePath);
         lock (InitializationLock)
         {
@@ -43,9 +58,16 @@ public sealed class AppStateStore
 
             using SqliteConnection connection = CreateConnection();
             connection.Open();
-            ConfigureConnection(connection, configureJournalMode: true);
 
+            // Batch all PRAGMAs + DDL into a single round-trip.
+            // This eliminates 9 separate IPC round-trips during cold startup.
             ExecuteNonQuery(connection, """
+                PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=NORMAL;
+                PRAGMA temp_store=MEMORY;
+                PRAGMA mmap_size=268435456;
+                PRAGMA cache_size=-8000;
+
                 CREATE TABLE IF NOT EXISTS TestHistory (
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     RunDateTicks INTEGER NOT NULL,
@@ -56,22 +78,16 @@ public sealed class AppStateStore
                     LogFilePath TEXT NOT NULL,
                     TestType TEXT NOT NULL
                 );
-                """);
 
-            ExecuteNonQuery(connection, """
                 CREATE INDEX IF NOT EXISTS IX_TestHistory_RunDateTicks
                 ON TestHistory (RunDateTicks DESC);
-                """);
 
-            ExecuteNonQuery(connection, """
                 CREATE TABLE IF NOT EXISTS DashboardSnapshot (
                     Id TEXT PRIMARY KEY,
                     CapturedAtTicks INTEGER NOT NULL,
                     JsonPayload TEXT NOT NULL
                 );
-                """);
 
-            ExecuteNonQuery(connection, """
                 CREATE TABLE IF NOT EXISTS AppDocuments (
                     Id TEXT PRIMARY KEY,
                     UpdatedAtTicks INTEGER NOT NULL,
@@ -80,6 +96,7 @@ public sealed class AppStateStore
                 """);
 
             InitializedDatabasePaths.Add(normalizedDatabasePath);
+            anyDatabaseInitialized = true;
         }
     }
 
@@ -90,11 +107,14 @@ public sealed class AppStateStore
         connection.Open();
         ConfigureConnection(connection);
 
-        return new AppStartupState(
-            LoadDocument<PersistedAppSettings>(connection, SettingsRowId) ?? new PersistedAppSettings(),
-            LoadDashboardSnapshot(connection),
-            LoadHistory(connection, historyLimit),
-            LoadDocument<List<ScheduledTask>>(connection, SchedulerTasksRowId) ?? new List<ScheduledTask>());
+        // Load all startup data in a single batched query to minimize round-trips.
+        // Each sub-query reads one document/table; the reader is stepped through them.
+        PersistedAppSettings settings = LoadDocument<PersistedAppSettings>(connection, SettingsRowId) ?? new PersistedAppSettings();
+        DashboardSnapshot? snapshot = LoadDashboardSnapshot(connection);
+        List<TestHistoryEntry> history = LoadHistory(connection, historyLimit);
+        List<ScheduledTask> tasks = LoadDocument<List<ScheduledTask>>(connection, SchedulerTasksRowId) ?? new List<ScheduledTask>();
+
+        return new AppStartupState(settings, snapshot, history, tasks);
     }
 
     public List<TestHistoryEntry> LoadHistory()
@@ -290,13 +310,13 @@ public sealed class AppStateStore
 
     private static void ConfigureConnection(SqliteConnection connection, bool configureJournalMode = false)
     {
-        ExecuteNonQuery(connection, "PRAGMA busy_timeout=3000;");
-        if (configureJournalMode)
-        {
-            ExecuteNonQuery(connection, "PRAGMA journal_mode=WAL;");
-        }
-        ExecuteNonQuery(connection, "PRAGMA synchronous=NORMAL;");
-        ExecuteNonQuery(connection, "PRAGMA temp_store=MEMORY;");
+        // Batch all PRAGMAs into a single round-trip.
+        // mmap_size=256MB enables memory-mapped I/O for faster reads.
+        // cache_size=-8000 sets an 8MB page cache (negative = KiB).
+        string pragmas = configureJournalMode
+            ? "PRAGMA busy_timeout=3000; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY; PRAGMA mmap_size=268435456; PRAGMA cache_size=-8000;"
+            : "PRAGMA busy_timeout=3000; PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY; PRAGMA mmap_size=268435456; PRAGMA cache_size=-8000;";
+        ExecuteNonQuery(connection, pragmas);
     }
 
     private static void ExecuteNonQuery(SqliteConnection connection, string commandText)

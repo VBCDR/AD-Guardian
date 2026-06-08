@@ -195,12 +195,26 @@ public partial class MainWindow
         }
     }
 
+    private string? _cachedDomainControllersInput;
+    private int _cachedDomainControllerCount;
+
     private int CountConfiguredDomainControllers()
     {
-        return domainControllers
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(dc => dc.Trim())
-            .Count(dc => !string.IsNullOrWhiteSpace(dc));
+        // Cache since domainControllers string rarely changes between refreshes.
+        if (string.Equals(_cachedDomainControllersInput, domainControllers, StringComparison.Ordinal))
+        {
+            return _cachedDomainControllerCount;
+        }
+
+        int count = 0;
+        foreach (string part in domainControllers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!string.IsNullOrWhiteSpace(part)) count++;
+        }
+
+        _cachedDomainControllersInput = domainControllers;
+        _cachedDomainControllerCount = count;
+        return count;
     }
 
     private string BuildLastRunSummary()
@@ -378,23 +392,40 @@ public partial class MainWindow
 
     private DashboardSnapshot BuildDashboardSnapshot()
     {
-        List<AdHealthFinding> activeFindings = GetActiveFindings().ToList();
-        int passingTests = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-        TestHistoryEntry? latestRun = historyEntries.FirstOrDefault();
+        // Use for-loops instead of LINQ to avoid allocations on every dashboard persist.
+        int passingTests = 0;
+        for (int i = 0; i < allResults.Count; i++)
+        {
+            if (allResults[i].Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passingTests++;
+        }
+
+        int crit = 0, high = 0, med = 0, low = 0;
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            // Match GetActiveFindings(): exclude "Info" severity.
+            string sev = allFindings[i].Severity;
+            if (sev.Equals("Info", StringComparison.OrdinalIgnoreCase)) continue;
+            if (sev.Equals("Critical", StringComparison.OrdinalIgnoreCase)) crit++;
+            else if (sev.Equals("High", StringComparison.OrdinalIgnoreCase)) high++;
+            else if (sev.Equals("Medium", StringComparison.OrdinalIgnoreCase)) med++;
+            else if (sev.Equals("Low", StringComparison.OrdinalIgnoreCase)) low++;
+        }
+
+        TestHistoryEntry? latestRun = historyEntries.Count > 0 ? historyEntries[0] : null;
 
         return new DashboardSnapshot
         {
             CapturedAtUtc = DateTime.UtcNow,
-            HealthScore = CalculateHealthScore(),
-            CriticalFindings = activeFindings.Count(f => f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase)),
+            HealthScore = CalculateHealthScore(crit, high, med),
+            CriticalFindings = crit,
             PassingTests = passingTests,
             ConfiguredDomainControllers = CountConfiguredDomainControllers(),
             TotalRuns = historyEntries.Count,
             LastRunSummary = historyEntries.Count > 0 ? BuildLastRunSummary() : "No runs yet",
-            FindingsCriticalCount = activeFindings.Count(f => f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase)),
-            FindingsHighCount = activeFindings.Count(f => f.Severity.Equals("High", StringComparison.OrdinalIgnoreCase)),
-            FindingsMediumCount = activeFindings.Count(f => f.Severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)),
-            FindingsLowCount = activeFindings.Count(f => f.Severity.Equals("Low", StringComparison.OrdinalIgnoreCase)),
+            FindingsCriticalCount = crit,
+            FindingsHighCount = high,
+            FindingsMediumCount = med,
+            FindingsLowCount = low,
             LastRunPassed = latestRun?.Passed ?? 0,
             LastRunFailed = latestRun?.Failed ?? 0,
             LastRunTotal = latestRun?.Total ?? 0

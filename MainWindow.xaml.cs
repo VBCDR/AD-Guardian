@@ -362,15 +362,7 @@ public partial class MainWindow : Window, IDisposable
         }
 
         int configuredControllers = CountConfiguredDomainControllers();
-        int visibleControllers = allResults
-            .Select(result => result.Server)
-            .Where(server => !string.IsNullOrWhiteSpace(server))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
         int total = allResults.Count;
-        int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-        int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
-        int activeFindings = GetActiveFindings().Count();
 
         if (total == 0)
         {
@@ -378,8 +370,25 @@ public partial class MainWindow : Window, IDisposable
             return;
         }
 
+        // Use for-loops and a HashSet instead of LINQ chain to avoid allocations.
+        int passed = 0, failed = 0;
+        HashSet<string> distinctServers = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < total; i++)
+        {
+            TestResult r = allResults[i];
+            if (r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passed++;
+            else if (r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failed++;
+            if (!string.IsNullOrWhiteSpace(r.Server)) distinctServers.Add(r.Server);
+        }
+
+        int activeFindings = 0;
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            if (!allFindings[i].Severity.Equals("Info", StringComparison.OrdinalIgnoreCase)) activeFindings++;
+        }
+
         HealthSummaryText.Text =
-            $"Current view shows {total} test result(s) across {visibleControllers} of {configuredControllers} configured domain controller(s). " +
+            $"Current view shows {total} test result(s) across {distinctServers.Count} of {configuredControllers} configured domain controller(s). " +
             $"{passed} passed, {failed} failed, and {activeFindings} actionable finding(s) are open. Each result row represents one test section, not a whole controller run.";
     }
 
