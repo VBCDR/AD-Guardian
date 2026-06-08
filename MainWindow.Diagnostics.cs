@@ -226,7 +226,19 @@ public partial class MainWindow
                     completedSteps,
                     totalSteps);
 
-                allResults.AddRange(ParseDCDiagOutput(dc, dcdiagResult, logFilePath));
+                List<TestResult> dcDiagResults = ParseDCDiagOutput(dc, dcdiagResult, logFilePath).ToList();
+                if (dcDiagResults.Count == 0)
+                {
+                    dcDiagResults.Add(new TestResult
+                    {
+                        Service = "DCDiag",
+                        Server = dc,
+                        Result = "FAIL",
+                        Message = "DCDiag produced no parseable output. DC may be unreachable.",
+                        LogFilePath = logFilePath
+                    });
+                }
+                allResults.AddRange(dcDiagResults);
                 logFilePaths.Add(logFilePath);
 
                 if (testDnsCheck)
@@ -466,9 +478,7 @@ public partial class MainWindow
                 $"Passed: {passed}",
                 $"Failed: {failed}"
             ]);
-    }
-
-    private static string FormatTestResultTable(List<TestResult> results, string[] dcList, string passColor, string failColor)
+    }        private static string FormatTestResultTable(List<TestResult> results, string[] dcList, string passColor, string failColor)
     {
         // Group by server without LINQ to reduce allocations in the email path.
         Dictionary<string, List<TestResult>> byServer = new(StringComparer.OrdinalIgnoreCase);
@@ -493,6 +503,11 @@ public partial class MainWindow
         {
             if (byServer.TryGetValue(dc, out List<TestResult>? dcResults))
             {
+                if (dcList.Length > 1)
+                {
+                    sb.Append($"<tr style='background:#e8eaf6;'><td colspan='3' style='padding:6px 10px;border:1px solid #ddd;font-weight:bold;color:#283593;'>DC: {System.Net.WebUtility.HtmlEncode(dc)}</td></tr>");
+                }
+
                 foreach (TestResult r in dcResults)
                 {
                     bool isPass = string.Equals(r.Result, "PASS", StringComparison.OrdinalIgnoreCase);

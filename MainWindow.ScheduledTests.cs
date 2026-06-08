@@ -66,7 +66,19 @@ public partial class MainWindow
                 string logFilePath = GetControllerLogPath(runSession, dc);
 
                 string dcdiagResult = await RunCommandAsync($"dcdiag /s:{dc} /c /v", logFilePath, token);
-                allResults.AddRange(ParseDCDiagOutput(dc, dcdiagResult, logFilePath));
+                List<TestResult> dcDiagResults = ParseDCDiagOutput(dc, dcdiagResult, logFilePath).ToList();
+                if (dcDiagResults.Count == 0)
+                {
+                    dcDiagResults.Add(new TestResult
+                    {
+                        Service = "DCDiag",
+                        Server = dc,
+                        Result = "FAIL",
+                        Message = "DCDiag produced no parseable output. DC may be unreachable.",
+                        LogFilePath = logFilePath
+                    });
+                }
+                allResults.AddRange(dcDiagResults);
                 logFilePaths.Add(logFilePath);
 
                 if (testDnsCheck)

@@ -122,6 +122,7 @@
                                 <DataGrid Grid.Row="1"
                                           x:Name="dgSecurityFindings" x:FieldModifier="public"
                                           AutoGenerateColumns="False"
+                                          IsReadOnly="True"
                                           BorderThickness="0"
                                           RowHeaderWidth="0"
                                           RowHeight="40"
