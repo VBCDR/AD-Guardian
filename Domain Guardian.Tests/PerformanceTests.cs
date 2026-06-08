@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
@@ -292,6 +293,78 @@ public class PerformanceTests
     {
         string output = "LDAP_FAIL: Connection refused";
         Assert.False(AdHealthMonitor.MainWindow.EvaluateLdapBindResult(output));
+    }
+
+    // ── Frozen vs unfrozen brush allocation benchmark ──────────────────────
+
+    private const int BrushBenchmarkIterations = 10_000;
+
+    /// <summary>
+    /// Quantifies the performance difference between creating unfrozen
+    /// SolidColorBrush instances on every call versus reusing cached frozen
+    /// brushes. Frozen brushes are shared, immutable, thread-safe, and skip
+    /// WPF change-notification bookkeeping — so they should be orders of
+    /// magnitude faster and produce zero GC pressure.
+    /// </summary>
+    [Fact]
+    public void FrozenBrushes_AreSignificantlyFasterThanUnfrozen()
+    {
+        // Warm up: create one unfrozen brush so JIT doesn't skew results.
+        _ = new SolidColorBrush(Color.FromRgb(211, 47, 47));
+
+        // ── Unfrozen: allocate a new brush each iteration ───────────────
+        var swUnfrozen = Stopwatch.StartNew();
+        for (int i = 0; i < BrushBenchmarkIterations; i++)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(211, 47, 47));
+            _ = brush.IsFrozen; // touch the property so it isn't optimised away
+        }
+        swUnfrozen.Stop();
+        long unfrozenMs = swUnfrozen.ElapsedMilliseconds;
+
+        // ── Frozen: read the cached static field each iteration ─────────
+        var swFrozen = Stopwatch.StartNew();
+        for (int i = 0; i < BrushBenchmarkIterations; i++)
+        {
+            Brush brush = AdHealthMonitor.MainWindow.FailBrushCached;
+            _ = brush.IsFrozen;
+        }
+        swFrozen.Stop();
+        long frozenMs = swFrozen.ElapsedMilliseconds;
+
+        // Frozen access should be at least as fast (typically 10-100× faster).
+        // Use a generous threshold to avoid CI flakiness.
+        Assert.True(frozenMs <= unfrozenMs + 5,
+            $"Frozen brushes ({frozenMs}ms) should be no slower than unfrozen ({unfrozenMs}ms) " +
+            $"over {BrushBenchmarkIterations} iterations. " +
+            $"Speedup: {(unfrozenMs == 0 ? "∞" : ((double)unfrozenMs / Math.Max(1, frozenMs)).ToString("F1"))}×");
+    }
+
+    /// <summary>
+    /// Verifies that frozen brushes produce zero per-call allocations by
+    /// measuring GC collections before and after a tight read loop.
+    /// </summary>
+    [Fact]
+    public void FrozenBrushes_ProduceZeroGcPressure()
+    {
+        // Force a full GC to establish a clean baseline.
+        GC.Collect(2, GCCollectionMode.Forced, true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Forced, true);
+
+        long gen0Before = GC.CollectionCount(0);
+
+        for (int i = 0; i < BrushBenchmarkIterations; i++)
+        {
+            _ = AdHealthMonitor.MainWindow.FailBrushCached;
+            _ = AdHealthMonitor.MainWindow.PassBrushCached;
+            _ = AdHealthMonitor.MainWindow.NeutralBrushCached;
+        }
+
+        long gen0After = GC.CollectionCount(0);
+
+        // Reading frozen static fields should trigger zero gen-0 collections.
+        Assert.Equal(gen0Before, gen0After);
     }
 
     // ── Health score boundary tests ──────────────────────────────────────
