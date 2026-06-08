@@ -635,6 +635,103 @@ public class AppStateStoreTests : IDisposable
         Assert.Equal(77, loaded.HealthScore);
     }
 
+    // ── Startup initialization timing ────────────────────────────────────
+
+    [Fact]
+    public void LoadStartupState_ColdStart_CompletesWithinThreshold()
+    {
+        // Arrange: seed a database with realistic startup data to simulate
+        // a user who has been using the app for a while.
+        var seedStore = CreateStore();
+
+        seedStore.SaveSettings(new PersistedAppSettings
+        {
+            DomainControllers = "dc01.corp.local,dc02.corp.local,dc03.corp.local",
+            RecipientEmail = "admin@corp.local",
+            TestDnsCheck = true,
+            TestReplication = true,
+            TestTimeSkew = true,
+            TestLdapBind = true,
+            TestCertDhcp = false,
+            TestSmbLdapSigning = true,
+            SendEmailManual = true,
+            SendEmailScheduled = true
+        });
+
+        seedStore.SaveDashboardSnapshot(new DashboardSnapshot
+        {
+            CapturedAtUtc = DateTime.UtcNow,
+            HealthScore = 87,
+            CriticalFindings = 1,
+            PassingTests = 17,
+            ConfiguredDomainControllers = 3,
+            TotalRuns = 42,
+            LastRunSummary = "17/20 passed",
+            FindingsCriticalCount = 1,
+            FindingsHighCount = 2,
+            FindingsMediumCount = 4,
+            FindingsLowCount = 1,
+            LastRunPassed = 17,
+            LastRunFailed = 3,
+            LastRunTotal = 20
+        });
+
+        var historyEntries = Enumerable.Range(0, 50)
+            .Select(i => new TestHistoryEntry
+            {
+                RunDate = DateTime.Now.AddDays(-i),
+                Total = 20,
+                Passed = 20 - (i % 4),
+                Failed = i % 4,
+                Details = $"Run {i}: {20 - (i % 4)}/20 passed",
+                LogFilePath = $@"C:\ADCheckLogs\runs\2026-06-{(i + 1):D2}\run{i}.txt",
+                TestType = i % 3 == 0 ? "Scheduled" : "Manual"
+            })
+            .ToList();
+        seedStore.SaveHistory(historyEntries);
+
+        seedStore.SaveScheduledTasks(new List<ScheduledTask>
+        {
+            new() { TaskName = "Nightly Health Check", DomainController = "dc01.corp.local", Frequency = "Daily", StartDate = DateTime.Today, StartTime = "22:00" },
+            new() { TaskName = "Weekly Full Scan", DomainController = "dc01.corp.local,dc02.corp.local", Frequency = "Weekly", StartDate = DateTime.Today, StartTime = "06:00" }
+        });
+
+        // Act: measure the full cold-start LoadStartupState call,
+        // which includes Initialize() + all data loading.
+        // Use a separate database path so Initialize() actually runs DDL
+        // (AppStateStore tracks initialized paths in a static set and
+        // short-circuits on repeat calls for the same path).
+        // Clear the pool first to flush WAL data into the main .db file.
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        string coldStartDbPath = Path.Combine(testDirectory, "coldstart.db");
+        File.Copy(databasePath, coldStartDbPath, overwrite: true);
+        // Also copy WAL/SHM sidecar files if present.
+        foreach (string suffix in new[] { "-wal", "-shm" })
+        {
+            string sidecar = databasePath + suffix;
+            if (File.Exists(sidecar))
+                File.Copy(sidecar, coldStartDbPath + suffix, overwrite: true);
+        }
+        var startupStore = new AppStateStore(coldStartDbPath);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var state = startupStore.LoadStartupState(historyLimit: 10);
+        stopwatch.Stop();
+
+        // Assert: startup data load must complete within a reasonable threshold.
+        // On modern hardware this typically takes <200ms; 2000ms catches regressions
+        // without being flaky on CI or slower machines.
+        Assert.True(stopwatch.ElapsedMilliseconds < 2000,
+            $"LoadStartupState took {stopwatch.ElapsedMilliseconds}ms, expected <2000ms");
+
+        // Verify the loaded state is complete and correct
+        Assert.Equal("dc01.corp.local,dc02.corp.local,dc03.corp.local", state.Settings.DomainControllers);
+        Assert.NotNull(state.DashboardSnapshot);
+        Assert.Equal(87, state.DashboardSnapshot.HealthScore);
+        Assert.True(state.History.Count <= 10, "History limit should be respected");
+        Assert.NotEmpty(state.ScheduledTasks);
+    }
+
     // ── Concurrent access ─────────────────────────────────────────────────
 
     [Fact]

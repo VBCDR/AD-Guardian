@@ -165,6 +165,7 @@ public partial class MainWindow : Window, IDisposable
 
     public MainWindow()
     {
+        Stopwatch startupStopwatch = Stopwatch.StartNew();
         string[] args = Environment.GetCommandLineArgs();
         isScheduledLaunch = args.Length > 1 && args[1].Equals("-scheduled", StringComparison.OrdinalIgnoreCase);
         Thread.CurrentThread.CurrentCulture = new CultureInfo("en-GB");
@@ -172,14 +173,17 @@ public partial class MainWindow : Window, IDisposable
         appStateStore = new AppStateStore(
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdHealthMonitor", "AppState.db"));
 
+        Trace.WriteLine($"[Startup] Pre-InitializeComponent: {startupStopwatch.ElapsedMilliseconds}ms");
         InitializeComponent();
+        Trace.WriteLine($"[Startup] InitializeComponent: {startupStopwatch.ElapsedMilliseconds}ms");
         SetupAdminWarningBanner();
-        Stopwatch startupStopwatch = Stopwatch.StartNew();
+        Trace.WriteLine($"[Startup] SetupAdminWarningBanner: {startupStopwatch.ElapsedMilliseconds}ms");
         dashboardRefreshTimer.Tick += DashboardRefreshTimer_Tick;
         UpdateActionButtonStates();
         InitializeBoundViews();
         cancellationTokenSource = new CancellationTokenSource();
         UpdateNavigationState();
+        Trace.WriteLine($"[Startup] Constructor complete: {startupStopwatch.ElapsedMilliseconds}ms");
         startupInitializationTask = isScheduledLaunch
             ? InitializeAppStateAsync(startupStopwatch)
             : DeferStartupInitializationAsync(startupStopwatch);
@@ -442,9 +446,11 @@ public partial class MainWindow : Window, IDisposable
         try
         {
             await Task.Run(appStateStore.Initialize).ConfigureAwait(true);
+            Trace.WriteLine($"[Startup] DB Initialize: {startupStopwatch.ElapsedMilliseconds}ms");
 
             int startupHistoryLimit = isScheduledLaunch ? int.MaxValue : 10;
             AppStartupState startupState = await Task.Run(() => appStateStore.LoadStartupState(startupHistoryLimit)).ConfigureAwait(true);
+            Trace.WriteLine($"[Startup] LoadStartupState: {startupStopwatch.ElapsedMilliseconds}ms");
 
             PersistedAppSettings settings = startupState.Settings;
             domainControllers = settings.DomainControllers;
@@ -466,6 +472,7 @@ public partial class MainWindow : Window, IDisposable
             SyncHistoryItems(historyEntries);
             ReplaceScheduledTasks(startupState.ScheduledTasks);
             schedulerTasksLoaded = true;
+            Trace.WriteLine($"[Startup] Apply state + sync: {startupStopwatch.ElapsedMilliseconds}ms");
 
             if (MainTabControl.SelectedIndex == 7)
             {
@@ -477,8 +484,9 @@ public partial class MainWindow : Window, IDisposable
             }
 
             RefreshDashboardNow();
+            Trace.WriteLine($"[Startup] Dashboard refresh: {startupStopwatch.ElapsedMilliseconds}ms");
             ScheduleLaunchUpdateCheck();
-            Debug.WriteLine($"Startup initialization completed in {startupStopwatch.ElapsedMilliseconds}ms.");
+            Trace.WriteLine($"[Startup] TOTAL startup: {startupStopwatch.ElapsedMilliseconds}ms");
         }
         catch (Exception ex)
         {
