@@ -44,14 +44,25 @@ public partial class MainWindow
     {
         dpHistoryFilter.SelectedDate = null;
         txtHistorySearch.Text = string.Empty;
-        historyItemsView?.Refresh();
+        if (historyPageBound)
+        {
+            EnsureHistoryItemsView().Refresh();
+        }
     }
 
-    private void ApplyHistoryFilter() => historyItemsView?.Refresh();
+    private void ApplyHistoryFilter()
+    {
+        if (historyPageBound)
+        {
+            EnsureHistoryItemsView().Refresh();
+        }
+    }
     private async Task SaveTestHistoryAsync(TestHistoryEntry entry)
     {
         try
         {
+            await EnsureHistoryLoadedAsync().ConfigureAwait(true);
+
             if (IsDuplicateHistoryEntry(historyEntries, entry))
             {
                 return;
@@ -91,6 +102,7 @@ public partial class MainWindow
             historyEntries = loadedHistory
                 .OrderByDescending(x => x.RunDate)
                 .ToList();
+            historyFullyLoaded = true;
             SyncHistoryItems(historyEntries);
             RefreshDashboard();
         }
@@ -98,6 +110,21 @@ public partial class MainWindow
         {
             NotificationService.Show(this, "Error", "Error loading test history: " + ex.Message, isError: true);
         }
+    }
+
+    private Task EnsureHistoryLoadedAsync()
+    {
+        if (historyFullyLoaded)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (historyLoadTask == null || historyLoadTask.IsCompleted)
+        {
+            historyLoadTask = LoadHistoryAsync();
+        }
+
+        return historyLoadTask;
     }
 
     internal async void ViewSelectedHistoryRun_Click(object sender, RoutedEventArgs e)

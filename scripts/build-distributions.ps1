@@ -18,13 +18,14 @@ if (-not $Portable -and -not $Installer) {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "Domain Guardian.csproj"
 $assemblyInfoPath = Join-Path $repoRoot "AssemblyInfo.cs"
-$installerProjectDir = Join-Path $repoRoot "installer"
-$installerScriptPath = Join-Path $installerProjectDir "AD Guardian Installer.iss"
+$installerProjectDir = $null
+$installerScriptPath = $null
 
 $distRoot = Join-Path $repoRoot "artifacts\distributions"
 $portableRoot = Join-Path $distRoot ("portable\" + $RuntimeIdentifier)
 $portableAppDir = Join-Path $portableRoot "app"
-$installerOutputDir = Join-Path $distRoot "installer\Release"
+$installerOutputDir = $null
+$expectedPortableExe = Join-Path $portableAppDir "Domain Guardian.exe"
 
 function Reset-Directory([string]$Path) {
     if (Test-Path $Path) {
@@ -40,15 +41,57 @@ function Copy-IfExists([string]$Source, [string]$Destination) {
 }
 
 function Get-AppVersion([string]$AssemblyInfoPath) {
-    $match = Select-String -Path $AssemblyInfoPath -Pattern 'AssemblyInformationalVersion\("([^"]+)"\)' | Select-Object -First 1
-    if ($match -and $match.Matches.Count -gt 0) {
-        return $match.Matches[0].Groups[1].Value
+    if (Test-Path $AssemblyInfoPath) {
+        $match = Select-String -Path $AssemblyInfoPath -Pattern 'AssemblyInformationalVersion\("([^"]+)"\)' | Select-Object -First 1
+        if ($match -and $match.Matches.Count -gt 0) {
+            return $match.Matches[0].Groups[1].Value
+        }
+    }
+
+    if (Test-Path $projectPath) {
+        [xml]$projectXml = Get-Content -Path $projectPath
+        $versionNode = $projectXml.Project.PropertyGroup.Version | Select-Object -First 1
+        if ($versionNode) {
+            return [string]$versionNode
+        }
     }
 
     return "2.0.0"
 }
 
-if ($Portable) {
+function Resolve-InstallerPaths {
+    $candidateDirs = @(
+        (Join-Path (Split-Path -Parent $repoRoot) "AD Guardian Installer"),
+        (Join-Path $repoRoot "installer")
+    )
+
+    foreach ($candidateDir in $candidateDirs) {
+        $candidateScript = Join-Path $candidateDir "AD Guardian Installer.iss"
+        if (Test-Path $candidateScript) {
+            return @{
+                Dir = $candidateDir
+                Script = $candidateScript
+                Output = Join-Path $candidateDir "Release"
+            }
+        }
+    }
+
+    throw "Installer script was not found in any expected location."
+}
+
+function Assert-PortablePayload {
+    if (-not (Test-Path $expectedPortableExe)) {
+        $payloadContents = if (Test-Path $portableAppDir) {
+            (Get-ChildItem -Path $portableAppDir -Force | Select-Object -ExpandProperty Name) -join ", "
+        } else {
+            "<missing directory>"
+        }
+
+        throw "Portable publish did not produce '$expectedPortableExe'. Current payload contents: $payloadContents"
+    }
+}
+
+function Publish-PortableApp {
     Reset-Directory $portableAppDir
 
     & dotnet publish $projectPath `
@@ -58,25 +101,39 @@ if ($Portable) {
         -o $portableAppDir
 
     Copy-IfExists (Join-Path $repoRoot "AD-Guardian-logo-_2_.ico") (Join-Path $portableAppDir "AD Guardian logo.ico")
+    Assert-PortablePayload
+}
+
+function Create-PortableZip {
+    $zipPath = Join-Path $portableRoot ("DomainGuardian-portable-" + $RuntimeIdentifier + ".zip")
+    if (Test-Path $zipPath) {
+        Remove-Item $zipPath -Force
+    }
+
+    Compress-Archive -Path (Join-Path $portableAppDir "*") -DestinationPath $zipPath
+}
+
+if ($Installer) {
+    $resolvedInstaller = Resolve-InstallerPaths
+    $installerProjectDir = $resolvedInstaller.Dir
+    $installerScriptPath = $resolvedInstaller.Script
+    $installerOutputDir = $resolvedInstaller.Output
+}
+
+if ($Portable) {
+    Publish-PortableApp
 
     if (-not $NoZip) {
-        $zipPath = Join-Path $portableRoot ("DomainGuardian-portable-" + $RuntimeIdentifier + ".zip")
-        if (Test-Path $zipPath) {
-            Remove-Item $zipPath -Force
-        }
-
-        Compress-Archive -Path (Join-Path $portableAppDir "*") -DestinationPath $zipPath
+        Create-PortableZip
     }
 }
 
 if ($Installer) {
-    if (-not (Test-Path $installerScriptPath)) {
-        throw "Installer script not found at '$installerScriptPath'."
-    }
-
     if (-not (Test-Path $portableAppDir)) {
         throw "Portable publish payload not found at '$portableAppDir'. Build portable output first or pass -Portable."
     }
+
+    Assert-PortablePayload
 
     Reset-Directory $installerOutputDir
 

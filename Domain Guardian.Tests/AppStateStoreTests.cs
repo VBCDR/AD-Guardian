@@ -418,6 +418,28 @@ public class AppStateStoreTests : IDisposable
         Assert.Equal("Daily", state.ScheduledTasks[0].TaskName);
     }
 
+    [Fact]
+    public void LoadStartupState_WithHistoryLimit_LoadsMostRecentEntriesOnly()
+    {
+        var store = CreateStore();
+        DateTime baseDate = new(2026, 1, 1);
+
+        store.SaveHistory(Enumerable.Range(0, 5)
+            .Select(index => new TestHistoryEntry
+            {
+                RunDate = baseDate.AddDays(index),
+                Total = index + 1,
+                Passed = index + 1
+            })
+            .ToList());
+
+        var state = store.LoadStartupState(historyLimit: 2);
+
+        Assert.Equal(2, state.History.Count);
+        Assert.Equal(baseDate.AddDays(4), state.History[0].RunDate);
+        Assert.Equal(baseDate.AddDays(3), state.History[1].RunDate);
+    }
+
     // ── Separate instances ────────────────────────────────────────────────
 
     [Fact]

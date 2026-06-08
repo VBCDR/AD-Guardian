@@ -83,7 +83,7 @@ public sealed class AppStateStore
         }
     }
 
-    public AppStartupState LoadStartupState()
+    public AppStartupState LoadStartupState(int historyLimit = int.MaxValue)
     {
         Initialize();
         using SqliteConnection connection = CreateConnection();
@@ -93,7 +93,7 @@ public sealed class AppStateStore
         return new AppStartupState(
             LoadDocument<PersistedAppSettings>(connection, SettingsRowId) ?? new PersistedAppSettings(),
             LoadDashboardSnapshot(connection),
-            LoadHistory(connection),
+            LoadHistory(connection, historyLimit),
             LoadDocument<List<ScheduledTask>>(connection, SchedulerTasksRowId) ?? new List<ScheduledTask>());
     }
 
@@ -107,15 +107,28 @@ public sealed class AppStateStore
         return LoadHistory(connection);
     }
 
-    private static List<TestHistoryEntry> LoadHistory(SqliteConnection connection)
+    private static List<TestHistoryEntry> LoadHistory(SqliteConnection connection, int limit = int.MaxValue)
     {
 
         using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT RunDateTicks, Total, Passed, Failed, Details, LogFilePath, TestType
-            FROM TestHistory
-            ORDER BY RunDateTicks DESC;
-            """;
+        if (limit == int.MaxValue)
+        {
+            command.CommandText = """
+                SELECT RunDateTicks, Total, Passed, Failed, Details, LogFilePath, TestType
+                FROM TestHistory
+                ORDER BY RunDateTicks DESC;
+                """;
+        }
+        else
+        {
+            command.CommandText = """
+                SELECT RunDateTicks, Total, Passed, Failed, Details, LogFilePath, TestType
+                FROM TestHistory
+                ORDER BY RunDateTicks DESC
+                LIMIT $limit;
+                """;
+            command.Parameters.AddWithValue("$limit", Math.Max(0, limit));
+        }
 
         using SqliteDataReader reader = command.ExecuteReader();
         List<TestHistoryEntry> items = new();

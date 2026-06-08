@@ -120,6 +120,8 @@ public partial class MainWindow : Window, IDisposable
     private bool securityPageBound;
     private bool schedulerPageBound;
     private bool healthDetailsTextPending;
+    private bool historyFullyLoaded;
+    private Task? historyLoadTask;
     private Task? startupInitializationTask;
     private int cachedLogLinesHash;
     private int cachedLogLinesLength = -1;
@@ -272,15 +274,6 @@ public partial class MainWindow : Window, IDisposable
     {
         await Dispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
         await InitializeAppStateAsync(startupStopwatch).ConfigureAwait(true);
-        await PrewarmPriorityPagesAsync().ConfigureAwait(true);
-    }
-
-    private async Task PrewarmPriorityPagesAsync()
-    {
-        await Dispatcher.InvokeAsync(() =>
-        {
-            EnsurePageBindings(1);
-        }, DispatcherPriority.ApplicationIdle);
     }
 
     public void DisplayTestResults(string results)
@@ -428,7 +421,8 @@ public partial class MainWindow : Window, IDisposable
         {
             await Task.Run(appStateStore.Initialize).ConfigureAwait(true);
 
-            AppStartupState startupState = await Task.Run(appStateStore.LoadStartupState).ConfigureAwait(true);
+            int startupHistoryLimit = isScheduledLaunch ? int.MaxValue : 10;
+            AppStartupState startupState = await Task.Run(() => appStateStore.LoadStartupState(startupHistoryLimit)).ConfigureAwait(true);
 
             PersistedAppSettings settings = startupState.Settings;
             domainControllers = settings.DomainControllers;
@@ -446,6 +440,7 @@ public partial class MainWindow : Window, IDisposable
             historyEntries = startupState.History
                 .OrderByDescending(x => x.RunDate)
                 .ToList();
+            historyFullyLoaded = isScheduledLaunch || historyEntries.Count < startupHistoryLimit;
             SyncHistoryItems(historyEntries);
             ReplaceScheduledTasks(startupState.ScheduledTasks);
             schedulerTasksLoaded = true;
@@ -460,7 +455,7 @@ public partial class MainWindow : Window, IDisposable
             }
 
             RefreshDashboardNow();
-            _ = CleanupLogFilesAsync();
+            ScheduleLaunchUpdateCheck();
             Debug.WriteLine($"Startup initialization completed in {startupStopwatch.ElapsedMilliseconds}ms.");
         }
         catch (Exception ex)
@@ -599,16 +594,52 @@ public partial class MainWindow : Window, IDisposable
 
     private void InitializeBoundViews()
     {
-        resultItemsView = CollectionViewSource.GetDefaultView(resultItems);
-        resultItemsView.Filter = ResultItemsFilter;
-        logResultItemsView = CollectionViewSource.GetDefaultView(logResultItems);
-        logResultItemsView.Filter = LogResultItemsFilter;
-        historyItemsView = CollectionViewSource.GetDefaultView(historyItems);
-        historyItemsView.Filter = HistoryItemsFilter;
-        findingItemsView = CollectionViewSource.GetDefaultView(findingItems);
-        findingItemsView.Filter = FindingItemsFilter;
+        _ = EnsureResultItemsView();
+    }
 
-        InitializeLogsFilters();
+    private ICollectionView EnsureResultItemsView()
+    {
+        if (resultItemsView == null)
+        {
+            resultItemsView = CollectionViewSource.GetDefaultView(resultItems);
+            resultItemsView.Filter = ResultItemsFilter;
+        }
+
+        return resultItemsView;
+    }
+
+    private ICollectionView EnsureLogResultItemsView()
+    {
+        if (logResultItemsView == null)
+        {
+            logResultItemsView = CollectionViewSource.GetDefaultView(logResultItems);
+            logResultItemsView.Filter = LogResultItemsFilter;
+            InitializeLogsFilters();
+        }
+
+        return logResultItemsView;
+    }
+
+    private ICollectionView EnsureHistoryItemsView()
+    {
+        if (historyItemsView == null)
+        {
+            historyItemsView = CollectionViewSource.GetDefaultView(historyItems);
+            historyItemsView.Filter = HistoryItemsFilter;
+        }
+
+        return historyItemsView;
+    }
+
+    private ICollectionView EnsureFindingItemsView()
+    {
+        if (findingItemsView == null)
+        {
+            findingItemsView = CollectionViewSource.GetDefaultView(findingItems);
+            findingItemsView.Filter = FindingItemsFilter;
+        }
+
+        return findingItemsView;
     }
 
     private void EnsurePageBindings(int pageIndex)
@@ -616,19 +647,20 @@ public partial class MainWindow : Window, IDisposable
         switch (pageIndex)
         {
             case 1 when !healthPageBound:
-                testResultsGrid.ItemsSource = resultItemsView;
+                testResultsGrid.ItemsSource = EnsureResultItemsView();
                 healthPageBound = true;
                 break;
             case 2 when !findingsPageBound:
-                dgFindings.ItemsSource = findingItemsView;
+                dgFindings.ItemsSource = EnsureFindingItemsView();
                 findingsPageBound = true;
                 break;
             case 4 when !historyPageBound:
-                dgTestHistory.ItemsSource = historyItemsView;
+                dgTestHistory.ItemsSource = EnsureHistoryItemsView();
                 historyPageBound = true;
+                _ = EnsureHistoryLoadedAsync();
                 break;
             case 5 when !logsPageBound:
-                dgLogsEntries.ItemsSource = logResultItemsView;
+                dgLogsEntries.ItemsSource = EnsureLogResultItemsView();
                 logsPageBound = true;
                 break;
             case 6 when !securityPageBound:
@@ -677,16 +709,35 @@ public partial class MainWindow : Window, IDisposable
     private void SyncHistoryItems(IEnumerable<TestHistoryEntry> items)
     {
         ReplaceCollection(historyItems, items);
-        using (historyItemsView?.DeferRefresh())
+        if (historyPageBound)
         {
+            using (EnsureHistoryItemsView().DeferRefresh())
+            {
+            }
         }
+    }
+
+    private void ScheduleLaunchUpdateCheck()
+    {
+        if (isScheduledLaunch)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(async () =>
+        {
+            await UpdateManager.ScheduleLaunchUpdateCheckAsync(this).ConfigureAwait(true);
+        }, DispatcherPriority.ApplicationIdle);
     }
 
     private void SyncFindingItems()
     {
         ReplaceCollection(findingItems, allFindings);
-        using (findingItemsView?.DeferRefresh())
+        if (findingsPageBound)
         {
+            using (EnsureFindingItemsView().DeferRefresh())
+            {
+            }
         }
     }
 
@@ -812,10 +863,10 @@ public partial class MainWindow : Window, IDisposable
         logsTextPending = false;
         dgLogsEntries.SelectedItem = null;
         DetailsPanel.Visibility = Visibility.Collapsed;
-        if (healthPageBound) testResultsGrid.ItemsSource = resultItemsView;
-        if (logsPageBound) dgLogsEntries.ItemsSource = logResultItemsView;
-        if (historyPageBound) dgTestHistory.ItemsSource = historyItemsView;
-        if (findingsPageBound) dgFindings.ItemsSource = findingItemsView;
+        if (healthPageBound) testResultsGrid.ItemsSource = EnsureResultItemsView();
+        if (logsPageBound) dgLogsEntries.ItemsSource = EnsureLogResultItemsView();
+        if (historyPageBound) dgTestHistory.ItemsSource = EnsureHistoryItemsView();
+        if (findingsPageBound) dgFindings.ItemsSource = EnsureFindingItemsView();
         if (securityPageBound) dgSecurityFindings.ItemsSource = securityFindingItems;
         UpdateHealthResultsLayout();
         UpdateHealthSummaryText();
@@ -1013,7 +1064,13 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void ApplyFindingsFilter() => findingItemsView?.Refresh();
+    private void ApplyFindingsFilter()
+    {
+        if (findingsPageBound)
+        {
+            EnsureFindingItemsView().Refresh();
+        }
+    }
 
     private async Task RunWithLoadingWindowAsync(string title, string message, Func<Task> operation)
     {
