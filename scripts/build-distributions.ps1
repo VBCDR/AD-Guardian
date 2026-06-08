@@ -10,6 +10,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$dotnetPath = "C:\Program Files\dotnet\dotnet.exe"
+if (-not (Test-Path $dotnetPath)) {
+    $dotnetPath = (Get-Command dotnet -ErrorAction Stop).Source
+}
+
 if (-not $Portable -and -not $Installer) {
     $Portable = $true
     $Installer = $true
@@ -94,7 +99,7 @@ function Assert-PortablePayload {
 function Publish-PortableApp {
     Reset-Directory $portableAppDir
 
-    & dotnet publish $projectPath `
+    & $dotnetPath publish $projectPath `
         -c $Configuration `
         -p:PublishProfile=PortableWinX64 `
         -p:RuntimeIdentifier=$RuntimeIdentifier `
