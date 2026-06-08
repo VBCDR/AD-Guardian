@@ -354,7 +354,7 @@ public partial class MainWindow
             {
                 FontSize = 18,
                 FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(26, 115, 232)),
+                Foreground = AccentBlueBrushCached,
                 Margin = new Thickness(0, 0, 0, 12)
             };
             doc.Blocks.Add(header);

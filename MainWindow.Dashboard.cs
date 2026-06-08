@@ -231,7 +231,7 @@ public partial class MainWindow
                 stack.Children.Add(new Border
                 {
                     Height = Math.Max(2, failHeight),
-                    Background = new SolidColorBrush(Color.FromRgb(211, 47, 47)),
+                    Background = FailBrushCached,
                     CornerRadius = new CornerRadius(3, 3, 0, 0),
                     Margin = new Thickness(0, 1, 0, 0)
                 });
@@ -241,7 +241,7 @@ public partial class MainWindow
                 stack.Children.Add(new Border
                 {
                     Height = Math.Max(2, passHeight),
-                    Background = new SolidColorBrush(Color.FromRgb(46, 125, 50)),
+                    Background = PassBrushCached,
                     CornerRadius = new CornerRadius(3, 3, 0, 0),
                     Margin = new Thickness(0, 1, 0, 0)
                 });
@@ -251,7 +251,7 @@ public partial class MainWindow
                 stack.Children.Add(new Border
                 {
                     Height = 2,
-                    Background = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+                    Background = NeutralBrushCached,
                     CornerRadius = new CornerRadius(3),
                     Margin = new Thickness(0, 1, 0, 0)
                 });
@@ -297,7 +297,7 @@ public partial class MainWindow
             {
                 Margin = new Thickness(0, 0, 0, 6),
                 Padding = new Thickness(0, 0, 0, 6),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(230, 236, 242)),
+                BorderBrush = SeparatorBrushCached,
                 BorderThickness = new Thickness(0, 0, 0, 1)
             };
             Grid g = new();
@@ -308,7 +308,7 @@ public partial class MainWindow
             {
                 Text = label,
                 FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(79, 100, 121)),
+                Foreground = BodyTextBrushCached,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(labelTb, 0);
@@ -344,15 +344,15 @@ public partial class MainWindow
             {
                 Text = "No actionable findings detected.",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(79, 100, 121))
+                Foreground = BodyTextBrushCached
             });
             return;
         }
 
-        AddRow("Critical", crit, new SolidColorBrush(Color.FromRgb(211, 47, 47)));
-        AddRow("High", high, new SolidColorBrush(Color.FromRgb(239, 108, 0)));
-        AddRow("Medium", med, new SolidColorBrush(Color.FromRgb(245, 166, 35)));
-        AddRow("Low", low, new SolidColorBrush(Color.FromRgb(100, 100, 100)));
+        AddRow("Critical", crit, FailBrushCached);
+        AddRow("High", high, HighSeverityBrushCached);
+        AddRow("Medium", med, MediumSeverityBrushCached);
+        AddRow("Low", low, LowSeverityBrushCached);
     }
 
     private bool HasLiveDashboardData()
@@ -434,7 +434,7 @@ public partial class MainWindow
             {
                 Margin = new Thickness(0, 0, 0, 6),
                 Padding = new Thickness(0, 0, 0, 6),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(230, 236, 242)),
+                BorderBrush = SeparatorBrushCached,
                 BorderThickness = new Thickness(0, 0, 0, 1)
             };
             Grid g = new();
@@ -445,7 +445,7 @@ public partial class MainWindow
             {
                 Text = label,
                 FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(79, 100, 121)),
+                Foreground = BodyTextBrushCached,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(labelTb, 0);
@@ -481,15 +481,15 @@ public partial class MainWindow
             {
                 Text = emptyMessage,
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(79, 100, 121))
+                Foreground = BodyTextBrushCached
             });
             return;
         }
 
-        AddRow("Critical", crit, new SolidColorBrush(Color.FromRgb(211, 47, 47)));
-        AddRow("High", high, new SolidColorBrush(Color.FromRgb(239, 108, 0)));
-        AddRow("Medium", med, new SolidColorBrush(Color.FromRgb(245, 166, 35)));
-        AddRow("Low", low, new SolidColorBrush(Color.FromRgb(100, 100, 100)));
+        AddRow("Critical", crit, FailBrushCached);
+        AddRow("High", high, HighSeverityBrushCached);
+        AddRow("Medium", med, MediumSeverityBrushCached);
+        AddRow("Low", low, LowSeverityBrushCached);
     }
 
     private int CalculateHealthScore()

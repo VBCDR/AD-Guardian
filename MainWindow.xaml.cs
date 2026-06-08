@@ -97,8 +97,29 @@ public partial class MainWindow : Window, IDisposable
     private const string RunLogsDirectoryName = "runs";
 
     private readonly List<ScheduledTask> scheduledTasks = new();
-    private static readonly Brush ActiveNavBgBrush = FrozenBrush(Color.FromRgb(26, 115, 232));
-    private static readonly Brush InactiveNavFgBrush = FrozenBrush(Color.FromRgb(176, 188, 201));
+    internal static readonly Brush ActiveNavBgBrush = FrozenBrush(Color.FromRgb(26, 115, 232));
+    internal static readonly Brush InactiveNavFgBrush = FrozenBrush(Color.FromRgb(176, 188, 201));
+
+    // Shared frozen brushes for dashboard/findings/history rendering.
+    // Frozen brushes are thread-safe, don't raise change notifications,
+    // and can be shared across elements — avoiding per-refresh allocations.
+    internal static readonly Brush FailBrushCached = FrozenBrush(Color.FromRgb(211, 47, 47));
+    internal static readonly Brush PassBrushCached = FrozenBrush(Color.FromRgb(46, 125, 50));
+    internal static readonly Brush NeutralBrushCached = FrozenBrush(Color.FromRgb(200, 200, 200));
+    internal static readonly Brush SeparatorBrushCached = FrozenBrush(Color.FromRgb(230, 236, 242));
+    internal static readonly Brush BodyTextBrushCached = FrozenBrush(Color.FromRgb(79, 100, 121));
+    internal static readonly Brush HighSeverityBrushCached = FrozenBrush(Color.FromRgb(239, 108, 0));
+    internal static readonly Brush MediumSeverityBrushCached = FrozenBrush(Color.FromRgb(245, 166, 35));
+    internal static readonly Brush LowSeverityBrushCached = FrozenBrush(Color.FromRgb(100, 100, 100));
+    internal static readonly Brush AccentBlueBrushCached = FrozenBrush(Color.FromRgb(26, 115, 232));
+
+    // Admin warning banner brushes (only created if banner is shown).
+    internal static readonly Brush AdminBannerBgBrush = FrozenBrush(Color.FromRgb(255, 248, 230));
+    internal static readonly Brush AdminBannerBorderBrush = FrozenBrush(Color.FromRgb(255, 183, 77));
+    internal static readonly Brush AdminBannerIconBrush = FrozenBrush(Color.FromRgb(230, 126, 34));
+    internal static readonly Brush AdminBannerTextBrush = FrozenBrush(Color.FromRgb(102, 60, 0));
+    internal static readonly Brush AdminBannerButtonBrush = FrozenBrush(Color.FromRgb(255, 152, 0));
+
     private static Brush FrozenBrush(Color color) { var b = new SolidColorBrush(color); b.Freeze(); return b; }
     private int schedulerSelectedTaskIndex = -1;
     private readonly DispatcherTimer dashboardRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
@@ -210,8 +231,8 @@ public partial class MainWindow : Window, IDisposable
 
         Border banner = new()
         {
-            Background = new SolidColorBrush(Color.FromRgb(255, 248, 230)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(255, 183, 77)),
+            Background = AdminBannerBgBrush,
+            BorderBrush = AdminBannerBorderBrush,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(14, 10, 14, 10),
@@ -225,7 +246,7 @@ public partial class MainWindow : Window, IDisposable
             Text = "\uE7BA",
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
             FontSize = 18,
-            Foreground = new SolidColorBrush(Color.FromRgb(230, 126, 34)),
+            Foreground = AdminBannerIconBrush,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 10, 0)
         };
@@ -234,7 +255,7 @@ public partial class MainWindow : Window, IDisposable
         {
             Text = "Running without administrator privileges.  Diagnostic tests will require elevation.",
             FontSize = 13,
-            Foreground = new SolidColorBrush(Color.FromRgb(102, 60, 0)),
+            Foreground = AdminBannerTextBrush,
             VerticalAlignment = VerticalAlignment.Center
         };
 
@@ -242,7 +263,7 @@ public partial class MainWindow : Window, IDisposable
         {
             Content = "Relaunch as Admin",
             Style = (Style)FindResource("RoundedButtonStyle"),
-            Background = new SolidColorBrush(Color.FromRgb(255, 152, 0)),
+            Background = AdminBannerButtonBrush,
             Height = 30,
             Padding = new Thickness(12, 4, 12, 4),
             Margin = new Thickness(16, 0, 0, 0),
