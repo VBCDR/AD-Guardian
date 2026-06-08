@@ -186,28 +186,35 @@
                                                  TextWrapping="Wrap"
                                                  VerticalScrollBarVisibility="Auto"/>
 
-                                        <TextBlock Text="Frequency" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
-                                        <ComboBox x:Name="SchedulerFrequency" x:FieldModifier="public"
-                                                  FontSize="14"
-                                                  Padding="5"
-                                                  Height="38"
-                                                  BorderBrush="#C7D5E2"
-                                                  BorderThickness="1"
-                                                  Background="White"
-                                                  Margin="0,4,0,10"
-                                                  SelectedIndex="0">
-                                            <ComboBoxItem Content="Daily"/>
-                                            <ComboBoxItem Content="Weekly"/>
-                                            <ComboBoxItem Content="Monthly"/>
-                                            <ComboBoxItem Content="Hourly"/>
-                                        </ComboBox>
-
                                         <Grid Margin="0,0,0,10">
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,6,0">
+
+                                            <!-- Frequency -->
+                                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                                <TextBlock Text="Frequency" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                                <ComboBox x:Name="SchedulerFrequency" x:FieldModifier="public"
+                                                          FontSize="14"
+                                                          Padding="5"
+                                                          Height="38"
+                                                          BorderBrush="#C7D5E2"
+                                                          BorderThickness="1"
+                                                          Background="White"
+                                                          Margin="0,4,0,0"
+                                                          SelectedIndex="0"
+                                                          MinWidth="90">
+                                                    <ComboBoxItem Content="Daily"/>
+                                                    <ComboBoxItem Content="Weekly"/>
+                                                    <ComboBoxItem Content="Monthly"/>
+                                                    <ComboBoxItem Content="Hourly"/>
+                                                </ComboBox>
+                                            </StackPanel>
+
+                                            <!-- Start Date -->
+                                            <StackPanel Grid.Column="1" Margin="0,0,10,0">
                                                 <TextBlock Text="Start Date" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
                                                 <DatePicker x:Name="SchedulerStartDate" x:FieldModifier="public"
                                                             FontSize="14"
@@ -218,9 +225,11 @@
                                                             Background="White"
                                                             Margin="0,4,0,0"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Margin="6,0,0,0">
+
+                                            <!-- Start Time -->
+                                            <StackPanel Grid.Column="2">
                                                 <TextBlock Text="Start Time" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
-                                                <TextBlock Text="Use 24-hour format, e.g. 14:30 for 2:30 PM" FontSize="11" Foreground="{StaticResource BodyBrush}" Margin="0,2,0,0"/>
+                                                <TextBlock Text="24-hour format, e.g. 14:30" FontSize="11" Foreground="{StaticResource BodyBrush}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                                                 <TextBox x:Name="SchedulerStartTime" x:FieldModifier="public"
                                                          FontSize="14"
                                                          Padding="8"

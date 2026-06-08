@@ -126,66 +126,115 @@ public partial class MainWindow
             string statusText = isFailed ? "Some tests failed — review the details below." : "All tests completed successfully.";
 
             string htmlBody = $@"
+<!DOCTYPE html>
 <html>
   <head>
+    <meta charset='utf-8'/>
     <style>
       body {{
-        font-family: 'Segoe UI', Arial, sans-serif;
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
         font-size: 14px;
-        color: #333;
+        color: #1a1a2e;
         margin: 0;
         padding: 0;
+        background-color: #f0f4f8;
+      }}
+      .wrapper {{
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 24px 16px;
+      }}
+      .card {{
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+        overflow: hidden;
       }}
       .header-bar {{
-        background-color: {headerBg};
+        background: linear-gradient(135deg, {headerBg}, #ffffff);
         border-left: 5px solid {headerColor};
-        padding: 14px 18px;
-        margin-bottom: 16px;
-        border-radius: 4px;
+        padding: 20px 24px;
       }}
       .header-title {{
-        font-size: 17px;
-        font-weight: bold;
+        font-size: 18px;
+        font-weight: 700;
         color: {headerColor};
+        letter-spacing: -0.2px;
       }}
       .header-time {{
         font-size: 12px;
-        color: #666;
-        margin-top: 2px;
+        color: #64748b;
+        margin-top: 4px;
+      }}
+      .status-badge {{
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        background: {headerBg};
+        color: {headerColor};
+        margin: 20px 24px 0;
       }}
       .content {{
-        margin-bottom: 15px;
-        padding: 0 4px;
+        padding: 16px 24px 24px;
       }}
       .details {{
-        background-color: #f7f7f7;
-        padding: 12px 14px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
+        background-color: #f8fafc;
+        padding: 16px 18px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin: 12px 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #334155;
+      }}
+      .details p {{
+        margin: 0 0 8px 0;
+      }}
+      .cta {{
+        display: inline-block;
+        padding: 10px 20px;
+        background: {headerColor};
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 13px;
+        margin-top: 8px;
       }}
       .footer {{
         font-size: 12px;
-        color: #777;
-        margin-top: 20px;
-        border-top: 1px solid #eee;
-        padding-top: 10px;
+        color: #94a3b8;
+        text-align: center;
+        padding: 16px 24px;
+        border-top: 1px solid #f1f5f9;
+      }}
+      .footer a {{
+        color: #64748b;
+        text-decoration: none;
       }}
     </style>
   </head>
   <body>
-    <div class='header-bar'>
-      <div class='header-title'>{subject}</div>
-      <div class='header-time'>{DateTime.Now:f}</div>
-    </div>
-    <div class='content'>
-      <p>{statusText}</p>
-      <div class='details'>
-         {bodyDetail}
+    <div class='wrapper'>
+      <div class='card'>
+        <div class='header-bar'>
+          <div class='header-title'>{subject}</div>
+          <div class='header-time'>{DateTime.Now:f}</div>
+        </div>
+        <div class='status-badge'>{(isFailed ? "\u2717 FAILED" : "\u2713 PASSED")}</div>
+        <div class='content'>
+          <p style='color:#475569;margin:0 0 4px 0;'>{statusText}</p>
+          <div class='details'>
+            {bodyDetail}
+          </div>
+          <p style='color:#64748b;font-size:13px;margin:12px 0 0 0;'>Please review the attached log file for detailed results.</p>
+        </div>
+        <div class='footer'>
+          Automated message from <strong>AD Guardian</strong> &middot; Domain health monitoring
+        </div>
       </div>
-      <p>Please review the attached log file for detailed information.</p>
-    </div>
-    <div class='footer'>
-      This is an automated message from AD Guardian.
     </div>
   </body>
 </html>";
