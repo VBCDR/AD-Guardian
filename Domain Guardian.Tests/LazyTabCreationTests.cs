@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Windows;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Domain_Guardian.Tests;
 
@@ -20,6 +22,19 @@ namespace Domain_Guardian.Tests;
 /// </summary>
 public class LazyTabCreationTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public LazyTabCreationTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
+    /// <summary>
+    /// Maximum acceptable creation time for a single tab UserControl (ms).
+    /// Regressions that eagerly load resources or add heavy initialization
+    /// will exceed this threshold and cause the test to fail.
+    /// </summary>
+    private const int MaxTabCreationMs = 5000;
     // WPF allows only one Application instance per AppDomain.
     // The first test creates it; subsequent tests reuse it.
     private static readonly object AppLock = new();
@@ -98,80 +113,128 @@ public class LazyTabCreationTests
     [Fact]
     public void HealthTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.HealthTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] HealthTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"HealthTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 
     [Fact]
     public void FindingsTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.FindingsTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] FindingsTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"FindingsTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 
     [Fact]
     public void InfrastructureTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.InfrastructureTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] InfrastructureTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"InfrastructureTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 
     [Fact]
     public void HistoryTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.HistoryTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] HistoryTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"HistoryTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 
     [Fact]
     public void LogsTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.LogsTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] LogsTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"LogsTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 
     [Fact]
     public void SecurityTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.SecurityTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] SecurityTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"SecurityTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 
     [Fact]
     public void SettingsTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.SettingsTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] SettingsTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"SettingsTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 
     [Fact]
     public void SchedulerTabPage_CanBeCreated()
     {
+        long ms = 0;
         RunOnStaThread(() =>
         {
+            var sw = Stopwatch.StartNew();
             var tab = new AdHealthMonitor.SchedulerTabPage();
+            sw.Stop();
+            ms = sw.ElapsedMilliseconds;
             Assert.NotNull(tab);
         });
+        _output.WriteLine($"[LazyTab] SchedulerTabPage created in {ms}ms");
+        Assert.True(ms < MaxTabCreationMs, $"SchedulerTabPage took {ms}ms (max {MaxTabCreationMs}ms)");
     }
 }
