@@ -130,6 +130,7 @@ public partial class MainWindow
 <html>
   <head>
     <meta charset='utf-8'/>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'/>
     <style>
       body {{
         font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
@@ -138,17 +139,33 @@ public partial class MainWindow
         margin: 0;
         padding: 0;
         background-color: #f0f4f8;
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }}
+      table {{
+        border-collapse: collapse;
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      }}
+      img {{
+        border: 0;
+        line-height: 100%;
+        outline: none;
+        text-decoration: none;
+        -ms-interpolation-mode: bicubic;
       }}
       .wrapper {{
         max-width: 640px;
         margin: 0 auto;
         padding: 24px 16px;
+        width: 100% !important;
       }}
       .card {{
         background: #ffffff;
         border-radius: 12px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
         overflow: hidden;
+        width: 100% !important;
       }}
       .header-bar {{
         background: linear-gradient(135deg, {headerBg}, #ffffff);
@@ -192,6 +209,12 @@ public partial class MainWindow
       .details p {{
         margin: 0 0 8px 0;
       }}
+      .table-wrap {{
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 12px 0;
+        width: 100%;
+      }}
       .cta {{
         display: inline-block;
         padding: 10px 20px;
@@ -213,6 +236,40 @@ public partial class MainWindow
       .footer a {{
         color: #64748b;
         text-decoration: none;
+      }}
+      @media screen and (max-width: 480px) {{
+        .wrapper {{
+          padding: 12px 8px !important;
+        }}
+        .header-bar {{
+          padding: 16px 16px !important;
+        }}
+        .header-title {{
+          font-size: 16px !important;
+        }}
+        .status-badge {{
+          margin: 16px 16px 0 !important;
+          font-size: 12px !important;
+          padding: 5px 12px !important;
+        }}
+        .content {{
+          padding: 12px 16px 20px !important;
+        }}
+        .details {{
+          padding: 12px 14px !important;
+          font-size: 13px !important;
+        }}
+        .table-wrap {{
+          margin: 12px -16px !important;
+          padding: 0 16px !important;
+        }}
+        .table-wrap table {{
+          min-width: 480px !important;
+        }}
+        .footer {{
+          padding: 12px 16px !important;
+          font-size: 11px !important;
+        }}
       }}
     </style>
   </head>

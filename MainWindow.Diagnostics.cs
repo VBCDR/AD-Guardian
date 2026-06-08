@@ -494,6 +494,7 @@ public partial class MainWindow
         }
 
         StringBuilder sb = new();
+        sb.Append("<div class='table-wrap'>");
         sb.Append("<table style='border-collapse:collapse;margin:10px 0;font-size:13px;width:100%;'>");
         sb.Append("<tr style='background:#f5f5f5;'><th style='padding:6px 10px;text-align:left;border:1px solid #ddd;'>Test</th>" +
                   "<th style='padding:6px 10px;text-align:left;border:1px solid #ddd;'>Status</th>" +
@@ -526,6 +527,7 @@ public partial class MainWindow
         }
 
         sb.Append("</table>");
+        sb.Append("</div>");
         sb.Append("<p style='font-size:12px;color:#666;margin:4px 0 0 0;'>→ Full details in attached ResultsSummary.txt</p>");
         return sb.ToString();
     }
