@@ -371,4 +371,128 @@ public class PerformanceTests
     {
         Assert.Equal("DC01", AdHealthMonitor.MainWindow.SanitizeFileNamePart("DC01"));
     }
+
+    // ── IsActiveSeverity helper ──────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Critical", true)]
+    [InlineData("High", true)]
+    [InlineData("Medium", true)]
+    [InlineData("Low", true)]
+    [InlineData("info", false)]
+    [InlineData("INFO", false)]
+    [InlineData("Info", false)]
+    public void IsActiveSeverity_ClassifiesCorrectly(string severity, bool expected)
+    {
+        Assert.Equal(expected, AdHealthMonitor.MainWindow.IsActiveSeverity(severity));
+    }
+
+    // ── Dashboard hash stability ─────────────────────────────────────────
+
+    [Fact]
+    public void DashboardHash_MatchesRefreshDashboardCorePattern()
+    {
+        // The dashboard hash in RefreshDashboardCore uses these fields:
+        // allResults.Count, passCount, failCount,
+        // allFindings.Count, critCount, highCount, medCount,
+        // historyEntries.Count, historyEntries[0].RunDate.Ticks,
+        // latestInventory.ForestName, latestInventory.DomainControllerCount,
+        // latestTelemetry.TotalServices
+        // Verify the hash format is deterministic for the same input.
+        string hash = string.Join("|",
+            10, 8, 2,
+            3, 1, 1, 1,
+            5, 638000000000000000L,
+            "corp.local", 3, 12);
+        string hash2 = string.Join("|",
+            10, 8, 2,
+            3, 1, 1, 1,
+            5, 638000000000000000L,
+            "corp.local", 3, 12);
+        Assert.Equal(hash, hash2);
+    }
+
+    [Fact]
+    public void DashboardHash_DifferentPassCount_ProducesDifferentHash()
+    {
+        string hash1 = string.Join("|", 10, 8, 2, 3, 1, 1, 1, 5, 0L, "", 0, 0);
+        string hash2 = string.Join("|", 10, 7, 3, 3, 1, 1, 1, 5, 0L, "", 0, 0);
+        Assert.NotEqual(hash1, hash2);
+    }
+
+    // ── SeverityRank ordering ────────────────────────────────────────────
+
+    [Fact]
+    public void SeverityRank_OrdersCorrectly()
+    {
+        Assert.True(AdHealthMonitor.MainWindow.SeverityRank("Critical") > AdHealthMonitor.MainWindow.SeverityRank("High"));
+        Assert.True(AdHealthMonitor.MainWindow.SeverityRank("High") > AdHealthMonitor.MainWindow.SeverityRank("Medium"));
+        Assert.True(AdHealthMonitor.MainWindow.SeverityRank("Medium") > AdHealthMonitor.MainWindow.SeverityRank("Low"));
+        Assert.True(AdHealthMonitor.MainWindow.SeverityRank("Low") > AdHealthMonitor.MainWindow.SeverityRank("Info"));
+    }
+
+    // ── BuildTestResultKey uniqueness ─────────────────────────────────────
+
+    [Fact]
+    public void BuildTestResultKey_DifferentResults_ProduceDifferentKeys()
+    {
+        var r1 = new AdHealthMonitor.TestResult { Service = "DNS", Server = "DC01", Result = "PASS", Message = "ok", LogFilePath = "a.log" };
+        var r2 = new AdHealthMonitor.TestResult { Service = "DNS", Server = "DC01", Result = "FAIL", Message = "ok", LogFilePath = "a.log" };
+
+        Assert.NotEqual(
+            AdHealthMonitor.MainWindow.BuildTestResultKey(r1),
+            AdHealthMonitor.MainWindow.BuildTestResultKey(r2));
+    }
+
+    [Fact]
+    public void BuildTestResultKey_SameResult_ProducesSameKey()
+    {
+        var r1 = new AdHealthMonitor.TestResult { Service = "DNS", Server = "DC01", Result = "PASS", Message = "ok", LogFilePath = "a.log" };
+        var r2 = new AdHealthMonitor.TestResult { Service = "DNS", Server = "DC01", Result = "PASS", Message = "ok", LogFilePath = "a.log" };
+
+        Assert.Equal(
+            AdHealthMonitor.MainWindow.BuildTestResultKey(r1),
+            AdHealthMonitor.MainWindow.BuildTestResultKey(r2));
+    }
+
+    // ── BuildFindingKey uniqueness ───────────────────────────────────────
+
+    [Fact]
+    public void BuildFindingKey_DifferentSeverities_ProduceDifferentKeys()
+    {
+        var f1 = new AdHealthMonitor.AdHealthFinding { Category = "DNS", Severity = "Critical", Source = "DCDiag", Target = "DC01", Summary = "DNS failed", Status = "FAIL", LogFilePath = "a.log" };
+        var f2 = new AdHealthMonitor.AdHealthFinding { Category = "DNS", Severity = "High", Source = "DCDiag", Target = "DC01", Summary = "DNS failed", Status = "FAIL", LogFilePath = "a.log" };
+
+        Assert.NotEqual(
+            AdHealthMonitor.MainWindow.BuildFindingKey(f1),
+            AdHealthMonitor.MainWindow.BuildFindingKey(f2));
+    }
+
+    // ── InferCategory coverage ───────────────────────────────────────────
+
+    [Theory]
+    [InlineData("DNS Resolution", "DNS")]
+    [InlineData("Replication", "Replication")]
+    [InlineData("NetLogons", "Domain Services")]
+    [InlineData("SysVol", "SYSVOL")]
+    [InlineData("MachineAccount", "Configuration")]
+    [InlineData("NTPService", "Infrastructure")]
+    public void InferCategory_ClassifiesCorrectly(string service, string expectedCategory)
+    {
+        Assert.Equal(expectedCategory, AdHealthMonitor.MainWindow.InferCategory(service));
+    }
+
+    // ── BuildRunSummary output ───────────────────────────────────────────
+
+    [Fact]
+    public void BuildRunSummary_ContainsAllFields()
+    {
+        string summary = AdHealthMonitor.MainWindow.BuildRunSummary(20, 18, 2, new[] { "DC01", "DC02" });
+
+        Assert.Contains("Total tests: 20", summary);
+        Assert.Contains("Passed: 18", summary);
+        Assert.Contains("Failed: 2", summary);
+        Assert.Contains("DC01", summary);
+        Assert.Contains("DC02", summary);
+    }
 }

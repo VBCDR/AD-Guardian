@@ -838,4 +838,349 @@ public class AppStateStoreTests : IDisposable
         var final = store.LoadSettings();
         Assert.NotNull(final);
     }
+
+    // ── SQLite startup performance ────────────────────────────────────────
+
+    [Fact]
+    public void Initialize_ColdStart_CompletesWithinThreshold()
+    {
+        // Measure the full cold-start Initialize() including DDL + PRAGMAs.
+        // Uses a fresh database path so the volatile fast-path doesn't short-circuit.
+        string coldPath = Path.Combine(testDirectory, "cold_init.db");
+        var store = new AppStateStore(coldPath);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        store.Initialize();
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.ElapsedMilliseconds < 1000,
+            $"Initialize() took {stopwatch.ElapsedMilliseconds}ms, expected <1000ms");
+        Assert.True(File.Exists(coldPath), "Database file should exist after Initialize()");
+    }
+
+    [Fact]
+    public void Initialize_SecondCall_IsNearInstant()
+    {
+        // The volatile fast-path + HashSet guard should make repeat calls
+        // complete in <1ms. This verifies the fast-path isn't regressing.
+        var store = CreateStore();
+        store.Initialize(); // Warm up
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 1000; i++)
+        {
+            store.Initialize();
+        }
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.ElapsedMilliseconds < 100,
+            $"1000x repeat Initialize() took {stopwatch.ElapsedMilliseconds}ms, expected <100ms");
+    }
+
+    [Fact]
+    public void Initialize_SetsWalJournalMode()
+    {
+        // WAL mode is critical for concurrent read/write performance.
+        // Verify it was set during Initialize().
+        var store = CreateStore();
+        store.Initialize();
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
+                Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared
+            }.ToString());
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "PRAGMA journal_mode;";
+        string journalMode = (string)cmd.ExecuteScalar()!;
+
+        Assert.Equal("wal", journalMode);
+    }
+
+    [Fact]
+    public void Initialize_CreatesAllRequiredTables()
+    {
+        var store = CreateStore();
+        store.Initialize();
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
+                Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared
+            }.ToString());
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;";
+        var tables = new List<string>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) tables.Add(reader.GetString(0));
+
+        Assert.Contains("TestHistory", tables);
+        Assert.Contains("DashboardSnapshot", tables);
+        Assert.Contains("AppDocuments", tables);
+    }
+
+    [Fact]
+    public void Initialize_CreatesTestHistoryIndex()
+    {
+        var store = CreateStore();
+        store.Initialize();
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
+                Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared
+            }.ToString());
+        connection.Open();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT name FROM sqlite_master WHERE type='index' AND name='IX_TestHistory_RunDateTicks';";
+        string? indexName = cmd.ExecuteScalar() as string;
+
+        Assert.NotNull(indexName);
+        Assert.Equal("IX_TestHistory_RunDateTicks", indexName);
+    }
+
+    [Fact]
+    public void LoadStartupState_FullDataRoundtrip_CompletesWithinThreshold()
+    {
+        // Simulate a mature user database with 200 history entries,
+        // dashboard snapshot, settings, and scheduled tasks.
+        // Then measure a cold LoadStartupState (historyLimit=10).
+        var seedStore = CreateStore();
+        seedStore.SaveSettings(new PersistedAppSettings
+        {
+            DomainControllers = string.Join(",", Enumerable.Range(1, 10).Select(i => $"dc{i:D2}.corp.local")),
+            RecipientEmail = "admin@corp.local",
+            TestDnsCheck = true, TestReplication = true, TestTimeSkew = true
+        });
+        seedStore.SaveDashboardSnapshot(new DashboardSnapshot
+        {
+            CapturedAtUtc = DateTime.UtcNow,
+            HealthScore = 82,
+            CriticalFindings = 3,
+            PassingTests = 15,
+            ConfiguredDomainControllers = 10,
+            TotalRuns = 200
+        });
+        seedStore.SaveHistory(Enumerable.Range(0, 200).Select(i => new TestHistoryEntry
+        {
+            RunDate = DateTime.Now.AddDays(-i),
+            Total = 20, Passed = 20 - (i % 5), Failed = i % 5,
+            Details = $"Run {i}",
+            LogFilePath = $@"C:\logs\run{i}.txt",
+            TestType = i % 3 == 0 ? "Scheduled" : "Manual"
+        }).ToList());
+        seedStore.SaveScheduledTasks(Enumerable.Range(0, 5).Select(i => new ScheduledTask
+        {
+            TaskName = $"Task {i}",
+            DomainController = $"dc{i:D2}.corp.local",
+            Frequency = "Daily"
+        }).ToList());
+
+        // Cold-start path
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        string coldPath = Path.Combine(testDirectory, "cold_full.db");
+        File.Copy(databasePath, coldPath, overwrite: true);
+        foreach (string suffix in new[] { "-wal", "-shm" })
+        {
+            string sidecar = databasePath + suffix;
+            if (File.Exists(sidecar)) File.Copy(sidecar, coldPath + suffix, overwrite: true);
+        }
+
+        var coldStore = new AppStateStore(coldPath);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var state = coldStore.LoadStartupState(historyLimit: 10);
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.ElapsedMilliseconds < 2000,
+            $"Cold LoadStartupState with 200 entries took {stopwatch.ElapsedMilliseconds}ms, expected <2000ms");
+        Assert.Equal(10, state.History.Count);
+        Assert.NotNull(state.DashboardSnapshot);
+        Assert.Equal(5, state.ScheduledTasks.Count);
+        Assert.Equal(82, state.DashboardSnapshot.HealthScore);
+    }
+
+    [Fact]
+    public void LoadSettings_ColdStart_CompletesWithinThreshold()
+    {
+        var seedStore = CreateStore();
+        seedStore.SaveSettings(new PersistedAppSettings
+        {
+            DomainControllers = "dc01.corp.local,dc02.corp.local",
+            RecipientEmail = "admin@corp.local"
+        });
+
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        string coldPath = Path.Combine(testDirectory, "cold_settings.db");
+        File.Copy(databasePath, coldPath, overwrite: true);
+        foreach (string suffix in new[] { "-wal", "-shm" })
+        {
+            string sidecar = databasePath + suffix;
+            if (File.Exists(sidecar)) File.Copy(sidecar, coldPath + suffix, overwrite: true);
+        }
+
+        var coldStore = new AppStateStore(coldPath);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var settings = coldStore.LoadSettings();
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.ElapsedMilliseconds < 1000,
+            $"Cold LoadSettings took {stopwatch.ElapsedMilliseconds}ms, expected <1000ms");
+        Assert.Equal("dc01.corp.local,dc02.corp.local", settings.DomainControllers);
+    }
+
+    [Fact]
+    public void SaveHistory_ThenLoad_LargeDataset_CompletesWithinThreshold()
+    {
+        var store = CreateStore();
+        var entries = Enumerable.Range(0, 500).Select(i => new TestHistoryEntry
+        {
+            RunDate = DateTime.Now.AddDays(-i),
+            Total = 20, Passed = 20 - (i % 5), Failed = i % 5,
+            Details = $"Run {i}: detailed result text for performance testing",
+            LogFilePath = $@"C:\ADCheckLogs\runs\2026-{(i / 30 + 1):D2}-{(i % 30 + 1):D2}\run{i}.txt",
+            TestType = i % 3 == 0 ? "Scheduled" : "Manual"
+        }).ToList();
+
+        var swSave = System.Diagnostics.Stopwatch.StartNew();
+        store.SaveHistory(entries);
+        swSave.Stop();
+
+        var swLoad = System.Diagnostics.Stopwatch.StartNew();
+        var loaded = store.LoadHistory();
+        swLoad.Stop();
+
+        Assert.True(swSave.ElapsedMilliseconds < 2000,
+            $"SaveHistory(500) took {swSave.ElapsedMilliseconds}ms, expected <2000ms");
+        Assert.True(swLoad.ElapsedMilliseconds < 1000,
+            $"LoadHistory(500) took {swLoad.ElapsedMilliseconds}ms, expected <1000ms");
+        Assert.Equal(500, loaded.Count);
+    }
+
+    [Fact]
+    public void SaveDashboardSnapshot_JsonSerialization_HandlesLargePayload()
+    {
+        // Verify large JSON payloads (e.g. detailed findings) don't crash or hang.
+        var store = CreateStore();
+        var snapshot = new DashboardSnapshot
+        {
+            CapturedAtUtc = DateTime.UtcNow,
+            HealthScore = 75,
+            LastRunSummary = new string('A', 50_000) // 50KB string
+        };
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        store.SaveDashboardSnapshot(snapshot);
+        var loaded = store.LoadDashboardSnapshot();
+        sw.Stop();
+
+        Assert.True(sw.ElapsedMilliseconds < 1000,
+            $"Large snapshot roundtrip took {sw.ElapsedMilliseconds}ms, expected <1000ms");
+        Assert.NotNull(loaded);
+        Assert.Equal(50_000, loaded.LastRunSummary.Length);
+    }
+
+    [Fact]
+    public void ConcurrentInitialize_MultiplePaths_DoNotDeadlock()
+    {
+        // Verify that concurrent Initialize() calls for different database
+        // paths don't deadlock on the shared InitializationLock.
+        var tasks = new List<Task>();
+        var stores = new List<AppStateStore>();
+        for (int i = 0; i < 5; i++)
+        {
+            string path = Path.Combine(testDirectory, $"concurrent_{i}.db");
+            var store = new AppStateStore(path);
+            stores.Add(store);
+            int idx = i;
+            tasks.Add(Task.Run(() =>
+            {
+                store.Initialize();
+                store.SaveSettings(new PersistedAppSettings { DomainControllers = $"dc{idx}" });
+            }));
+        }
+
+        bool completed = Task.WaitAll(tasks.ToArray(), TimeSpan.FromSeconds(10));
+        Assert.True(completed, "Concurrent Initialize() calls should not deadlock");
+
+        // Verify all stores wrote their data
+        for (int i = 0; i < 5; i++)
+        {
+            var settings = stores[i].LoadSettings();
+            Assert.Equal($"dc{i}", settings.DomainControllers);
+        }
+    }
+
+    [Fact]
+    public void Initialize_SetsPerformancePragmas()
+    {
+        // Verify the key performance PRAGMAs (mmap_size, cache_size) are
+        // applied during Initialize(). These were added to speed up reads.
+        var store = CreateStore();
+        store.Initialize();
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = databasePath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
+                Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Shared
+            }.ToString());
+        connection.Open();
+
+        // Note: mmap_size and cache_size are persisted per-database (cache_size
+        // since SQLite 3.32+, mmap_size since 3.39+), so they can be verified on
+        // a fresh connection. synchronous and temp_store are per-connection only.
+        // synchronous and temp_store are per-connection and not persisted,
+        // so they cannot be tested this way.
+        using var mmapCmd = connection.CreateCommand();
+        mmapCmd.CommandText = "PRAGMA mmap_size;";
+        long mmapSize = (long)mmapCmd.ExecuteScalar()!;
+        Assert.True(mmapSize > 0, $"mmap_size should be >0, got {mmapSize}");
+
+        using var cacheCmd = connection.CreateCommand();
+        cacheCmd.CommandText = "PRAGMA cache_size;";
+        long cacheSize = (long)cacheCmd.ExecuteScalar()!;
+        // cache_size=-8000 means 8MB; SQLite returns the negative value.
+        Assert.True(cacheSize != 0, $"cache_size should be non-zero, got {cacheSize}");
+    }
+
+    [Fact]
+    public void LoadStartupState_AfterSaveAndReopen_DataIsConsistent()
+    {
+        // Simulate the real startup flow: save data, close pool (flush WAL),
+        // open a new store on the same file, and verify all data survives.
+        var store = CreateStore();
+        store.SaveSettings(new PersistedAppSettings { DomainControllers = "dc01" });
+        store.SaveDashboardSnapshot(new DashboardSnapshot { HealthScore = 90 });
+        store.SaveHistory(new List<TestHistoryEntry>
+        {
+            new() { RunDate = DateTime.Now, Total = 20, Passed = 20 }
+        });
+        store.SaveScheduledTasks(new List<ScheduledTask>
+        {
+            new() { TaskName = "Daily", DomainController = "dc01" }
+        });
+
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        // New store instance simulates app restart
+        var store2 = CreateStore();
+        var state = store2.LoadStartupState();
+
+        Assert.Equal("dc01", state.Settings.DomainControllers);
+        Assert.NotNull(state.DashboardSnapshot);
+        Assert.Equal(90, state.DashboardSnapshot.HealthScore);
+        Assert.Single(state.History);
+        Assert.Equal(20, state.History[0].Passed);
+        Assert.Single(state.ScheduledTasks);
+        Assert.Equal("Daily", state.ScheduledTasks[0].TaskName);
+    }
 }
