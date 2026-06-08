@@ -17,37 +17,6 @@ namespace AdHealthMonitor
 
         protected override void OnStartup(StartupEventArgs e)
         {
-            DispatcherUnhandledException += (_, args) =>
-            {
-                try
-                {
-                    string errorPath = Path.Combine(
-                        System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
-                        "AdHealthMonitor", "crash.log");
-                    Directory.CreateDirectory(Path.GetDirectoryName(errorPath)!);
-                    File.AppendAllText(errorPath,
-                        $"[{System.DateTime.Now:yyyy-MM-dd HH:mm:ss}] UNHANDLED:\n{args.Exception}\n\n");
-                    System.Windows.MessageBox.Show(args.Exception.ToString(), "AD Guardian Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                catch { }
-                args.Handled = true;
-            };
-
-            System.AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-            {
-                try
-                {
-                    string errorPath = Path.Combine(
-                        System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
-                        "AdHealthMonitor", "crash.log");
-                    Directory.CreateDirectory(Path.GetDirectoryName(errorPath)!);
-                    File.AppendAllText(errorPath,
-                        $"[{System.DateTime.Now:yyyy-MM-dd HH:mm:ss}] DOMAIN UNHANDLED:\n{args.ExceptionObject}\n\n");
-                }
-                catch { }
-            };
-
             IsRunningAsAdmin = CheckIsAdmin();
 
             bool isInitializationLaunch = e.Args.Length > 0 &&
