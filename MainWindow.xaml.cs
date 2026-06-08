@@ -324,13 +324,14 @@ public partial class MainWindow : Window, IDisposable
 
     private void UpdateHealthResultsLayout()
     {
+        if (_HealthTab == null) return;
         bool showDetails = DetailsPanel.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(latestRunDetailsText);
         DetailsPanel.Visibility = showDetails ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateHealthSummaryText()
     {
-        if (HealthSummaryText == null)
+        if (_HealthTab == null || HealthSummaryText == null)
         {
             return;
         }
@@ -646,6 +647,9 @@ public partial class MainWindow : Window, IDisposable
     {
         switch (pageIndex)
         {
+            case 3 when _InfrastructureTab == null:
+                _ = EnsureInfrastructureTab();
+                break;
             case 1 when !healthPageBound:
                 testResultsGrid.ItemsSource = EnsureResultItemsView();
                 healthPageBound = true;
@@ -694,16 +698,24 @@ public partial class MainWindow : Window, IDisposable
     private void UpdateActionButtonStates()
     {
         bool hasResults = allResults.Count > 0;
-        RunButton.IsEnabled = !isRunInProgress;
-        StopButton.IsEnabled = isRunInProgress;
-        ExportButton.IsEnabled = hasResults;
-        ExecutiveSummaryButton.IsEnabled = hasResults;
-        SearchBox.IsEnabled = hasResults;
-        SearchButton.IsEnabled = hasResults;
-        ViewSelectedLogButton.IsEnabled = testResultsGrid.SelectedItems.Count > 0;
-        OpenFindingLogButton.IsEnabled = dgFindings?.SelectedItem is AdHealthFinding finding &&
-                                         !string.IsNullOrWhiteSpace(finding.LogFilePath) &&
-                                         File.Exists(finding.LogFilePath);
+
+        if (_HealthTab != null)
+        {
+            RunButton.IsEnabled = !isRunInProgress;
+            StopButton.IsEnabled = isRunInProgress;
+            ExportButton.IsEnabled = hasResults;
+            ExecutiveSummaryButton.IsEnabled = hasResults;
+            SearchBox.IsEnabled = hasResults;
+            SearchButton.IsEnabled = hasResults;
+            ViewSelectedLogButton.IsEnabled = testResultsGrid.SelectedItems.Count > 0;
+        }
+
+        if (_FindingsTab != null)
+        {
+            OpenFindingLogButton.IsEnabled = dgFindings?.SelectedItem is AdHealthFinding finding &&
+                                             !string.IsNullOrWhiteSpace(finding.LogFilePath) &&
+                                             File.Exists(finding.LogFilePath);
+        }
     }
 
     private void SyncHistoryItems(IEnumerable<TestHistoryEntry> items)
@@ -745,7 +757,10 @@ public partial class MainWindow : Window, IDisposable
     {
         scheduledTasks.Clear();
         scheduledTasks.AddRange(items);
-        SchedulerTaskList?.Items.Refresh();
+        if (_SchedulerTab != null)
+        {
+            SchedulerTaskList?.Items.Refresh();
+        }
     }
 
     private static void ReplaceCollection<T>(ObservableCollection<T> target, IEnumerable<T> source)

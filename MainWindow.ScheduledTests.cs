@@ -255,7 +255,7 @@ public partial class MainWindow
 
     private void RefreshSchedulerTaskList()
     {
-        if (!schedulerTasksLoaded)
+        if (!schedulerTasksLoaded || _SchedulerTab == null)
         {
             return;
         }

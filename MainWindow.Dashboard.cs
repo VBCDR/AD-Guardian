@@ -114,10 +114,13 @@ public partial class MainWindow
             f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
             f.Severity.Equals("High", StringComparison.OrdinalIgnoreCase));
 
-        HealthScoreText.Text = healthScore.ToString(CultureInfo.InvariantCulture);
-        CriticalFindingsText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
-        PassingTestsText.Text = passingTests.ToString(CultureInfo.InvariantCulture);
-        DomainControllerCountText.Text = configuredControllers.ToString(CultureInfo.InvariantCulture);
+        if (_HealthTab != null)
+        {
+            HealthScoreText.Text = healthScore.ToString(CultureInfo.InvariantCulture);
+            CriticalFindingsText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
+            PassingTestsText.Text = passingTests.ToString(CultureInfo.InvariantCulture);
+            DomainControllerCountText.Text = configuredControllers.ToString(CultureInfo.InvariantCulture);
+        }
 
         HomeHealthScoreText.Text = healthScore.ToString(CultureInfo.InvariantCulture);
         HomeCriticalText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
@@ -130,26 +133,35 @@ public partial class MainWindow
             ? BuildLastRunSummary()
             : "No runs yet";
 
-        ForestNameText.Text = latestInventory.ForestName;
-        DomainNameText.Text = latestInventory.DomainName;
-        DomainModeText.Text = latestInventory.DomainMode;
-        InfrastructureSummaryText.Text = latestInventory.DomainControllerCount > 0
-            ? $"Collected breadth for {latestInventory.DomainControllerCount} domain controller(s), {latestInventory.UserCount} users, and {latestInventory.ComputerCount} computers."
-            : "Run a collection to populate infrastructure breadth.";
-        OuCountText.Text = latestInventory.OrganizationalUnitCount.ToString(CultureInfo.InvariantCulture);
-        GpoCountText.Text = latestInventory.GroupPolicyCount.ToString(CultureInfo.InvariantCulture);
-        TrustCountText.Text = latestInventory.TrustCount.ToString(CultureInfo.InvariantCulture);
-        UserCountText.Text = latestInventory.UserCount.ToString(CultureInfo.InvariantCulture);
-        ComputerCountText.Text = latestInventory.ComputerCount.ToString(CultureInfo.InvariantCulture);
-        InfrastructureDcCountText.Text = latestInventory.DomainControllerCount.ToString(CultureInfo.InvariantCulture);
+        if (_InfrastructureTab != null)
+        {
+            ForestNameText.Text = latestInventory.ForestName;
+            DomainNameText.Text = latestInventory.DomainName;
+            DomainModeText.Text = latestInventory.DomainMode;
+            InfrastructureSummaryText.Text = latestInventory.DomainControllerCount > 0
+                ? $"Collected breadth for {latestInventory.DomainControllerCount} domain controller(s), {latestInventory.UserCount} users, and {latestInventory.ComputerCount} computers."
+                : "Run a collection to populate infrastructure breadth.";
+            OuCountText.Text = latestInventory.OrganizationalUnitCount.ToString(CultureInfo.InvariantCulture);
+            GpoCountText.Text = latestInventory.GroupPolicyCount.ToString(CultureInfo.InvariantCulture);
+            TrustCountText.Text = latestInventory.TrustCount.ToString(CultureInfo.InvariantCulture);
+            UserCountText.Text = latestInventory.UserCount.ToString(CultureInfo.InvariantCulture);
+            ComputerCountText.Text = latestInventory.ComputerCount.ToString(CultureInfo.InvariantCulture);
+            InfrastructureDcCountText.Text = latestInventory.DomainControllerCount.ToString(CultureInfo.InvariantCulture);
+        }
 
-        PrivilegedInsightsText.Text = BuildPrivilegeInsightSummary();
-        SecuritySummaryText.Text = latestTelemetry.TotalServices > 0
-            ? $"Security view includes {allFindings.Count(f => IsSecurityFinding(f))} security-oriented finding(s) across privilege and telemetry signals."
-            : "Security findings are derived from privileged group breadth, failing directory tests, and service telemetry.";
-        FindingsOpenCountText.Text = activeFindings.Count.ToString(CultureInfo.InvariantCulture);
-        FindingsHighCountText.Text = highOrAboveFindings.ToString(CultureInfo.InvariantCulture);
-        FindingsCriticalCountText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
+        if (_SecurityTab != null)
+        {
+            PrivilegedInsightsText.Text = BuildPrivilegeInsightSummary();
+            SecuritySummaryText.Text = latestTelemetry.TotalServices > 0
+                ? $"Security view includes {allFindings.Count(f => IsSecurityFinding(f))} security-oriented finding(s) across privilege and telemetry signals."
+                : "Security findings are derived from privileged group breadth, failing directory tests, and service telemetry.";
+        }
+        if (_FindingsTab != null)
+        {
+            FindingsOpenCountText.Text = activeFindings.Count.ToString(CultureInfo.InvariantCulture);
+            FindingsHighCountText.Text = highOrAboveFindings.ToString(CultureInfo.InvariantCulture);
+            FindingsCriticalCountText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
+        }
 
         if (findingsPageBound)
         {
@@ -379,10 +391,13 @@ public partial class MainWindow
 
     private void ApplyCachedDashboardSnapshot(DashboardSnapshot snapshot)
     {
-        HealthScoreText.Text = snapshot.HealthScore.ToString(CultureInfo.InvariantCulture);
-        CriticalFindingsText.Text = snapshot.CriticalFindings.ToString(CultureInfo.InvariantCulture);
-        PassingTestsText.Text = snapshot.PassingTests.ToString(CultureInfo.InvariantCulture);
-        DomainControllerCountText.Text = snapshot.ConfiguredDomainControllers.ToString(CultureInfo.InvariantCulture);
+        if (_HealthTab != null)
+        {
+            HealthScoreText.Text = snapshot.HealthScore.ToString(CultureInfo.InvariantCulture);
+            CriticalFindingsText.Text = snapshot.CriticalFindings.ToString(CultureInfo.InvariantCulture);
+            PassingTestsText.Text = snapshot.PassingTests.ToString(CultureInfo.InvariantCulture);
+            DomainControllerCountText.Text = snapshot.ConfiguredDomainControllers.ToString(CultureInfo.InvariantCulture);
+        }
 
         HomeHealthScoreText.Text = snapshot.HealthScore.ToString(CultureInfo.InvariantCulture);
         HomeCriticalText.Text = snapshot.CriticalFindings.ToString(CultureInfo.InvariantCulture);
@@ -393,10 +408,13 @@ public partial class MainWindow
         HomeTotalRunsText.Text = snapshot.TotalRuns.ToString(CultureInfo.InvariantCulture);
         HomeLastRunText.Text = snapshot.LastRunSummary;
 
-        FindingsOpenCountText.Text = (snapshot.FindingsCriticalCount + snapshot.FindingsHighCount + snapshot.FindingsMediumCount + snapshot.FindingsLowCount)
-            .ToString(CultureInfo.InvariantCulture);
-        FindingsHighCountText.Text = (snapshot.FindingsCriticalCount + snapshot.FindingsHighCount).ToString(CultureInfo.InvariantCulture);
-        FindingsCriticalCountText.Text = snapshot.FindingsCriticalCount.ToString(CultureInfo.InvariantCulture);
+        if (_FindingsTab != null)
+        {
+            FindingsOpenCountText.Text = (snapshot.FindingsCriticalCount + snapshot.FindingsHighCount + snapshot.FindingsMediumCount + snapshot.FindingsLowCount)
+                .ToString(CultureInfo.InvariantCulture);
+            FindingsHighCountText.Text = (snapshot.FindingsCriticalCount + snapshot.FindingsHighCount).ToString(CultureInfo.InvariantCulture);
+            FindingsCriticalCountText.Text = snapshot.FindingsCriticalCount.ToString(CultureInfo.InvariantCulture);
+        }
 
         RenderHomeFindingsSummary(
             snapshot.FindingsCriticalCount,

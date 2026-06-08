@@ -3,6 +3,7 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace AdHealthMonitor;
 
@@ -25,6 +26,8 @@ public partial class MainWindow
         {
             _HealthTab = new HealthTabPage();
             HealthTabHost.Content = _HealthTab;
+            UpdateActionButtonStates();
+            Dispatcher.BeginInvoke(() => RefreshDashboard(), DispatcherPriority.Background);
         }
         return _HealthTab;
     }
@@ -34,6 +37,8 @@ public partial class MainWindow
         {
             _FindingsTab = new FindingsTabPage();
             FindingsTabHost.Content = _FindingsTab;
+            UpdateActionButtonStates();
+            Dispatcher.BeginInvoke(() => RefreshDashboard(), DispatcherPriority.Background);
         }
         return _FindingsTab;
     }
@@ -43,6 +48,7 @@ public partial class MainWindow
         {
             _InfrastructureTab = new InfrastructureTabPage();
             InfrastructureTabHost.Content = _InfrastructureTab;
+            Dispatcher.BeginInvoke(() => RefreshDashboard(), DispatcherPriority.Background);
         }
         return _InfrastructureTab;
     }
@@ -73,6 +79,7 @@ public partial class MainWindow
         {
             _SecurityTab = new SecurityTabPage();
             SecurityTabHost.Content = _SecurityTab;
+            Dispatcher.BeginInvoke(() => RefreshDashboard(), DispatcherPriority.Background);
         }
         return _SecurityTab;
     }
