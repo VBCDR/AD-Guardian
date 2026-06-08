@@ -22,6 +22,7 @@
         <SolidColorBrush x:Key="HeroChipTextBrush" Color="#F6ECFF"/>
         <SolidColorBrush x:Key="HeroButtonBrush" Color="#A16AF2"/>
         <SolidColorBrush x:Key="CardShadowBrush" Color="#120F2A"/>
+        <SolidColorBrush x:Key="SubtleInkBrush" Color="#717182"/>
 
         <Style x:Key="ThinScrollBar" TargetType="ScrollBar">
             <Setter Property="Stylus.IsPressAndHoldEnabled" Value="False"/>
