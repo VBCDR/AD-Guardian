@@ -57,25 +57,6 @@ public class PerformanceTests
     }
 
     [Fact]
-    public void AdminBannerBrushes_AreFrozen()
-    {
-        Brush[] brushes =
-        [
-            AdHealthMonitor.MainWindow.AdminBannerBgBrush,
-            AdHealthMonitor.MainWindow.AdminBannerBorderBrush,
-            AdHealthMonitor.MainWindow.AdminBannerIconBrush,
-            AdHealthMonitor.MainWindow.AdminBannerTextBrush,
-            AdHealthMonitor.MainWindow.AdminBannerButtonBrush,
-        ];
-
-        foreach (Brush brush in brushes)
-        {
-            Assert.True(brush.IsFrozen,
-                $"Admin banner brush {brush} should be frozen");
-        }
-    }
-
-    [Fact]
     public void LogBrushes_AreFrozen()
     {
         // LogNormalBrush, LogFailBrush, LogPassBrush are private static readonly.

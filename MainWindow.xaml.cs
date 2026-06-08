@@ -113,12 +113,6 @@ public partial class MainWindow : Window, IDisposable
     internal static readonly Brush LowSeverityBrushCached = FrozenBrush(Color.FromRgb(100, 100, 100));
     internal static readonly Brush AccentBlueBrushCached = FrozenBrush(Color.FromRgb(26, 115, 232));
 
-    // Admin warning banner brushes (only created if banner is shown).
-    internal static readonly Brush AdminBannerBgBrush = FrozenBrush(Color.FromRgb(255, 248, 230));
-    internal static readonly Brush AdminBannerBorderBrush = FrozenBrush(Color.FromRgb(255, 183, 77));
-    internal static readonly Brush AdminBannerIconBrush = FrozenBrush(Color.FromRgb(230, 126, 34));
-    internal static readonly Brush AdminBannerTextBrush = FrozenBrush(Color.FromRgb(102, 60, 0));
-    internal static readonly Brush AdminBannerButtonBrush = FrozenBrush(Color.FromRgb(255, 152, 0));
 
     private static Brush FrozenBrush(Color color) { var b = new SolidColorBrush(color); b.Freeze(); return b; }
     private int schedulerSelectedTaskIndex = -1;
@@ -176,8 +170,7 @@ public partial class MainWindow : Window, IDisposable
         Trace.WriteLine($"[Startup] Pre-InitializeComponent: {startupStopwatch.ElapsedMilliseconds}ms");
         InitializeComponent();
         Trace.WriteLine($"[Startup] InitializeComponent: {startupStopwatch.ElapsedMilliseconds}ms");
-        SetupAdminWarningBanner();
-        Trace.WriteLine($"[Startup] SetupAdminWarningBanner: {startupStopwatch.ElapsedMilliseconds}ms");
+        Trace.WriteLine($"[Startup] Post-InitializeComponent setup: {startupStopwatch.ElapsedMilliseconds}ms");
         dashboardRefreshTimer.Tick += DashboardRefreshTimer_Tick;
         UpdateActionButtonStates();
         InitializeBoundViews();
@@ -207,92 +200,6 @@ public partial class MainWindow : Window, IDisposable
                 await RunScheduledTestsAsync(scheduledTaskName).ConfigureAwait(true);
             }, DispatcherPriority.Background);
         }
-    }
-
-    private void SetupAdminWarningBanner()
-    {
-        if (App.IsRunningAsAdmin || isScheduledLaunch)
-        {
-            return;
-        }
-
-        Grid? mainGrid = ProgressPanel.Parent as Grid;
-        if (mainGrid == null)
-        {
-            return;
-        }
-
-        mainGrid.RowDefinitions.Insert(1, new RowDefinition { Height = GridLength.Auto });
-
-        foreach (UIElement child in mainGrid.Children)
-        {
-            int currentRow = Grid.GetRow(child);
-            if (currentRow >= 1)
-            {
-                Grid.SetRow(child, currentRow + 1);
-            }
-        }
-
-        Border banner = new()
-        {
-            Background = AdminBannerBgBrush,
-            BorderBrush = AdminBannerBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(14, 10, 14, 10),
-            Margin = new Thickness(0, 0, 0, 12)
-        };
-
-        StackPanel panel = new() { Orientation = Orientation.Horizontal };
-
-        TextBlock icon = new()
-        {
-            Text = "\uE7BA",
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = 18,
-            Foreground = AdminBannerIconBrush,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0)
-        };
-
-        TextBlock message = new()
-        {
-            Text = "Running without administrator privileges.  Diagnostic tests will require elevation.",
-            FontSize = 13,
-            Foreground = AdminBannerTextBrush,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        Button elevateButton = new()
-        {
-            Content = "Relaunch as Admin",
-            Style = (Style)FindResource("RoundedButtonStyle"),
-            Background = AdminBannerButtonBrush,
-            Height = 30,
-            Padding = new Thickness(12, 4, 12, 4),
-            Margin = new Thickness(16, 0, 0, 0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        elevateButton.Click += (_, _) =>
-        {
-            if (App.TryRelaunchAsAdmin())
-            {
-                Application.Current.Shutdown();
-            }
-            else
-            {
-                NotificationService.Show(this, "Elevation Failed", "Could not relaunch as administrator.", isError: true);
-            }
-        };
-
-        panel.Children.Add(icon);
-        panel.Children.Add(message);
-        panel.Children.Add(elevateButton);
-        banner.Child = panel;
-
-        Grid.SetRow(banner, 1);
-        mainGrid.Children.Add(banner);
     }
 
     private async Task DeferStartupInitializationAsync(Stopwatch startupStopwatch)

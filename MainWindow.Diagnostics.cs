@@ -136,29 +136,7 @@ public partial class MainWindow
             return;
         }
 
-        if (!App.IsRunningAsAdmin)
-        {
-            MessageBoxResult elevationChoice = MessageBox.Show(
-                this,
-                "Running diagnostic tests requires administrator privileges.\n\n" +
-                "Would you like to relaunch AD Guardian as administrator?",
-                "Administrator Required",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
-
-            if (elevationChoice == MessageBoxResult.Yes)
-            {
-                if (App.TryRelaunchAsAdmin())
-                {
-                    Application.Current.Shutdown();
-                    return;
-                }
-
-                NotificationService.Show(this, "Elevation Failed", "Could not relaunch as administrator. Please start AD Guardian manually using 'Run as administrator'.", isError: true);
-            }
-
-            return;
-        }
+        // The app.manifest requires requireAdministrator, so the process is always elevated.
 
         isRunInProgress = true;
         UpdateActionButtonStates();
