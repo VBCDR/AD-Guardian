@@ -37,6 +37,7 @@ namespace AdHealthMonitor;
 public partial class MainWindow
 {
     private string? _dashboardHash;
+    private StringBuilder? _hashBuilder;
     private async void DashboardRefreshTimer_Tick(object? sender, EventArgs e)
     {
         try
@@ -101,14 +102,19 @@ public partial class MainWindow
             else if (sev.Equals("Low", StringComparison.OrdinalIgnoreCase)) lowCount++;
         }
 
-        string newHash = string.Join("|",
-            allResults.Count, passCount, failCount,
-            allFindings.Count, critCount, highCount, medCount,
-            historyEntries.Count,
-            historyEntries.Count > 0 ? historyEntries[0].RunDate.Ticks : 0,
-            latestInventory.ForestName,
-            latestInventory.DomainControllerCount,
-            latestTelemetry.TotalServices);
+        // Build hash with StringBuilder to avoid string.Join boxing on every 120ms tick.
+        _hashBuilder ??= new(128);
+        _hashBuilder.Clear();
+        StringBuilder hashBuilder = _hashBuilder;
+        hashBuilder.Append(allResults.Count).Append('|')
+            .Append(passCount).Append('|').Append(failCount).Append('|')
+            .Append(allFindings.Count).Append('|').Append(critCount).Append('|').Append(highCount).Append('|').Append(medCount).Append('|')
+            .Append(historyEntries.Count).Append('|')
+            .Append(historyEntries.Count > 0 ? historyEntries[0].RunDate.Ticks : 0).Append('|')
+            .Append(latestInventory.ForestName ?? "").Append('|')
+            .Append(latestInventory.DomainControllerCount).Append('|')
+            .Append(latestTelemetry.TotalServices);
+        string newHash = hashBuilder.ToString();
         if (_dashboardHash == newHash) return;
         _dashboardHash = newHash;
 

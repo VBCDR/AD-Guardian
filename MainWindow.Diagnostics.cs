@@ -54,6 +54,8 @@ public partial class MainWindow
         return Path.Combine(LogDirectoryPath, RunLogsDirectoryName);
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _sanitizeCache = new(StringComparer.OrdinalIgnoreCase);
+
     internal static string SanitizeFileNamePart(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -61,16 +63,19 @@ public partial class MainWindow
             return "run";
         }
 
-        char[] invalidChars = Path.GetInvalidFileNameChars();
-        char[] sanitized = value
-            .Trim()
-            .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
-            .ToArray();
+        return _sanitizeCache.GetOrAdd(value, static k =>
+        {
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            char[] sanitized = k
+                .Trim()
+                .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
+                .ToArray();
 
-        string collapsed = string.Join("_", new string(sanitized)
-            .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+            string collapsed = string.Join("_", new string(sanitized)
+                .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
 
-        return string.IsNullOrWhiteSpace(collapsed) ? "run" : collapsed;
+            return string.IsNullOrWhiteSpace(collapsed) ? "run" : collapsed;
+        });
     }
 
     internal static RunLogSession CreateRunLogSession(DateTime startedAt, string testType)
@@ -305,9 +310,13 @@ public partial class MainWindow
             latestLogsFilePath = combinedLogPath;
             latestLogsText = File.Exists(combinedLogPath) ? await File.ReadAllTextAsync(combinedLogPath, token).ConfigureAwait(true) : string.Empty;
 
-            int total = allResults.Count;
-            int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-            int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
+        int total = allResults.Count;
+        int passed = 0, failed = 0;
+        for (int i = 0; i < total; i++)
+        {
+            if (allResults[i].Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passed++;
+            else if (allResults[i].Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failed++;
+        }
             string summary = BuildRunSummary(total, passed, failed, dcList);
             DisplayTestResults(summary);
             ForceRefreshDashboard();
@@ -461,9 +470,18 @@ public partial class MainWindow
 
     private static string FormatTestResultTable(List<TestResult> results, string[] dcList, string passColor, string failColor)
     {
-        var byServer = results
-            .GroupBy(r => r.Server ?? dcList.FirstOrDefault() ?? "Unknown", StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+        // Group by server without LINQ to reduce allocations in the email path.
+        Dictionary<string, List<TestResult>> byServer = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < results.Count; i++)
+        {
+            string key = results[i].Server ?? dcList.FirstOrDefault() ?? "Unknown";
+            if (!byServer.TryGetValue(key, out List<TestResult>? list))
+            {
+                list = new List<TestResult>();
+                byServer[key] = list;
+            }
+            list.Add(results[i]);
+        }
 
         StringBuilder sb = new();
         sb.Append("<table style='border-collapse:collapse;margin:10px 0;font-size:13px;width:100%;'>");
@@ -589,11 +607,21 @@ public partial class MainWindow
             }
         }
 
-        return results
-            .Where(result => !string.Equals(result.Result, "In Progress", StringComparison.OrdinalIgnoreCase))
-            .GroupBy(result => BuildTestResultKey(result), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .ToList();
+        // Deduplicate without LINQ to reduce allocations on every test completion.
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        List<TestResult> deduped = new();
+        for (int i = 0; i < results.Count; i++)
+        {
+            TestResult r = results[i];
+            if (string.Equals(r.Result, "In Progress", StringComparison.OrdinalIgnoreCase))
+                continue;
+            string key = BuildTestResultKey(r);
+            if (seen.Add(key))
+            {
+                deduped.Add(r);
+            }
+        }
+        return deduped;
     }
 
     internal static string BuildTestResultKey(TestResult result)
