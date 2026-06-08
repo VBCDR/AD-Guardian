@@ -30,7 +30,7 @@
                                             Height="40"
                                             Click="RunButton_Click">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="â–¶" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                             <TextBlock Text="Run Tests" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
@@ -42,7 +42,7 @@
                                              IsEnabled="False"
                                              Click="StopButton_Click">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="â¹" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                                             <TextBlock Text="Stop" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
