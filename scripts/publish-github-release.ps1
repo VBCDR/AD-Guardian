@@ -12,12 +12,15 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$installerReleaseDir = Join-Path $repoRoot "artifacts\distributions\installer\Release"
+$installerReleaseDir = Join-Path (Split-Path -Parent $repoRoot) "AD Guardian Installer\Release"
 $installerPath = Join-Path $installerReleaseDir "AD Guardian Installer.exe"
+$uploadAssetPath = Join-Path $env:TEMP "AD.Guardian.Installer.exe"
 
 if (-not (Test-Path $installerPath)) {
     throw "Installer not found at '$installerPath'. Build it first."
 }
+
+Copy-Item -LiteralPath $installerPath -Destination $uploadAssetPath -Force
 
 $ghCandidates = @(
     "gh",
@@ -40,7 +43,7 @@ $repo = "VBCDR/AD-Guardian"
 $releaseView = & $gh release view $Tag --repo $repo 2>$null
 
 if ($LASTEXITCODE -ne 0) {
-    $createArgs = @("release", "create", $Tag, $installerPath, "--repo", $repo, "--title", $Title)
+    $createArgs = @("release", "create", $Tag, $uploadAssetPath, "--repo", $repo, "--title", $Title)
     if ($Notes) {
         $createArgs += @("--notes", $Notes)
     } else {
@@ -53,5 +56,5 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-& $gh release upload $Tag $installerPath --repo $repo --clobber
+& $gh release upload $Tag $uploadAssetPath --repo $repo --clobber
 exit $LASTEXITCODE
