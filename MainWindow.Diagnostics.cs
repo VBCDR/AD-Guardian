@@ -952,7 +952,7 @@ public partial class MainWindow
                 RefreshLogSectionEntries(latestLogsText, latestLogsFilePath);
                 LogsFileNameText.Text = $"Combined full logs from {uniqueLogFiles.Count} files";
                 logsTextPending = false;
-                _ = NavigateToSectionAsync(5);
+                NavigateToSection(5);
                 return;
             }
 
@@ -1016,7 +1016,7 @@ public partial class MainWindow
                 .Distinct());
             LogsFileNameText.Text = $"({validResults.Count} result(s)) {serviceSources} — {fileSources}";
             logsTextPending = false;
-            _ = NavigateToSectionAsync(5);
+            NavigateToSection(5);
         }
         catch (Exception ex)
         {

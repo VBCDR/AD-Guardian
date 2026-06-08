@@ -223,9 +223,9 @@ public partial class MainWindow
         Activate();
     }
 
-    private async void ScheduleTestsButton_Click(object sender, RoutedEventArgs e)
+    private void ScheduleTestsButton_Click(object sender, RoutedEventArgs e)
     {
-        await NavigateToSectionAsync(8).ConfigureAwait(true);
+        NavigateToSection(8);
     }
 
     private void LoadSchedulerTasks()

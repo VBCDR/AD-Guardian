@@ -197,7 +197,7 @@ public partial class MainWindow
             LogsFileNameText.Text = Path.GetFileName(logFilePath);
             RefreshLogSectionEntries(latestLogsText, latestLogsFilePath);
             logsTextPending = false;
-            _ = NavigateToSectionAsync(5);
+            NavigateToSection(5);
         }
         catch (Exception ex)
         {
@@ -439,9 +439,9 @@ public partial class MainWindow
         UpdateLogsWorkspaceSummary();
     }
 
-    internal async void BackToHealth_Click(object sender, RoutedEventArgs e)
+    internal void BackToHealth_Click(object sender, RoutedEventArgs e)
     {
-        await NavigateToSectionAsync(1).ConfigureAwait(true);
+        NavigateToSection(1);
     }
 
     internal async void OpenLogFile_Click(object sender, RoutedEventArgs e)
@@ -479,7 +479,7 @@ public partial class MainWindow
             RefreshLogSectionEntries(content, filePath);
 
             logsTextPending = false;
-            _ = NavigateToSectionAsync(5);
+            NavigateToSection(5);
         }
         catch (Exception ex)
         {

@@ -142,7 +142,7 @@ public partial class MainWindow
                 return;
             }
 
-            await NavigateToSectionAsync(1).ConfigureAwait(true);
+            NavigateToSection(1);
             await ShowScheduledResultsAsync(logFilePath).ConfigureAwait(true);
         }
         else

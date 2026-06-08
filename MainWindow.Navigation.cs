@@ -69,23 +69,23 @@ public partial class MainWindow
         });
     }
 
-    private async void HomeRunTests_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void HomeRunTests_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
-        await NavigateToSectionAsync(1).ConfigureAwait(true);
+        NavigateToSection(1);
         RunButton_Click(sender, e);
     }
 
-    private async void HomeViewFindings_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void HomeViewFindings_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
-        await NavigateToSectionAsync(2).ConfigureAwait(true);
+        NavigateToSection(2);
     }
 
-    private async void HomeViewHistory_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void HomeViewHistory_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
-        await NavigateToSectionAsync(4).ConfigureAwait(true);
+        NavigateToSection(4);
     }
 
     private void HomeCard_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
@@ -117,9 +117,9 @@ public partial class MainWindow
         }
     }
 
-    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        await NavigateToSectionAsync(7).ConfigureAwait(true);
+        NavigateToSection(7);
     }
 
     private void LoadSettingsIntoPage()
@@ -177,15 +177,12 @@ public partial class MainWindow
         }
     }
 
-    private async Task NavigateToSectionAsync(int index)
+    private void NavigateToSection(int index)
     {
         if (index < 0 || index >= MainTabControl.Items.Count)
         {
             return;
         }
-
-        UpdateNavigationState(index);
-        await Dispatcher.Yield(DispatcherPriority.Render);
 
         if (MainTabControl.SelectedIndex != index)
         {
@@ -193,14 +190,14 @@ public partial class MainWindow
         }
     }
 
-    private async void NavSectionButton_Click(object sender, RoutedEventArgs e)
+    private void NavSectionButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string tag } &&
             int.TryParse(tag, NumberStyles.Integer, CultureInfo.InvariantCulture, out int index) &&
             index >= 0 &&
             index < MainTabControl.Items.Count)
         {
-            await NavigateToSectionAsync(index).ConfigureAwait(true);
+            NavigateToSection(index);
         }
     }
 
@@ -256,8 +253,8 @@ public partial class MainWindow
         }
 
         int selectedIndex = MainTabControl.SelectedIndex;
-        EnsurePageBindings(selectedIndex);
         UpdateNavigationState();
+        EnsurePageBindings(selectedIndex);
         if (selectedIndex == 1)
         {
             EnsureHealthDetailsTextLoaded();
@@ -289,14 +286,8 @@ public partial class MainWindow
 
         if (MainTabControl.SelectedContent is UIElement content)
         {
-            content.Opacity = 0.75;
-            DoubleAnimation fadeIn = new()
-            {
-                To = 1.0,
-                Duration = TimeSpan.FromMilliseconds(150),
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            content.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+            content.BeginAnimation(UIElement.OpacityProperty, null);
+            content.Opacity = 1.0;
         }
 
         if (selectedIndex == 5)
