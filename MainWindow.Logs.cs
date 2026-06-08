@@ -288,11 +288,18 @@ public partial class MainWindow
             return;
         }
 
-        List<TestResult> visibleItems = logResultItemsView?.Cast<TestResult>().ToList() ?? new List<TestResult>();
-        int failures = visibleItems.Count(item => item.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
-        int passes = visibleItems.Count(item => item.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
+        int visibleCount = 0, failures = 0, passes = 0;
+        if (logResultItemsView != null)
+        {
+            foreach (TestResult item in logResultItemsView)
+            {
+                visibleCount++;
+                if (item.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failures++;
+                else if (item.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passes++;
+            }
+        }
 
-        LogsVisibleCountText.Text = visibleItems.Count.ToString(CultureInfo.InvariantCulture);
+        LogsVisibleCountText.Text = visibleCount.ToString(CultureInfo.InvariantCulture);
         LogsFailureCountText.Text = failures.ToString(CultureInfo.InvariantCulture);
         LogsPassCountText.Text = passes.ToString(CultureInfo.InvariantCulture);
         string selectedController = LogsDcFilter?.SelectedItem as string ?? "All domain controllers";
@@ -654,9 +661,9 @@ public partial class MainWindow
 
         foreach (ParsedLogSection section in filteredSections)
         {
-            List<string> visibleLines = filterSearch
+            IReadOnlyList<string> visibleLines = filterSearch
                 ? section.Lines.Where(line => line.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0).ToList()
-                : new List<string>(section.Lines);
+                : section.Lines;
 
             if (visibleLines.Count == 0)
             {

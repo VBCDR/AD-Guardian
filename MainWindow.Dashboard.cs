@@ -83,16 +83,29 @@ public partial class MainWindow
 
     private void RefreshDashboardCore()
     {
+        // Pre-compute counts once to avoid repeated LINQ scans over the same collections.
+        int passCount = 0, failCount = 0;
+        for (int i = 0; i < allResults.Count; i++)
+        {
+            if (allResults[i].Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passCount++;
+            else if (allResults[i].Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failCount++;
+        }
+
+        int critCount = 0, highCount = 0, medCount = 0, lowCount = 0;
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            string sev = allFindings[i].Severity;
+            if (sev.Equals("Critical", StringComparison.OrdinalIgnoreCase)) critCount++;
+            else if (sev.Equals("High", StringComparison.OrdinalIgnoreCase)) highCount++;
+            else if (sev.Equals("Medium", StringComparison.OrdinalIgnoreCase)) medCount++;
+            else if (sev.Equals("Low", StringComparison.OrdinalIgnoreCase)) lowCount++;
+        }
+
         string newHash = string.Join("|",
-            allResults.Count,
-            allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)),
-            allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)),
-            allFindings.Count,
-            allFindings.Count(f => f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase)),
-            allFindings.Count(f => f.Severity.Equals("High", StringComparison.OrdinalIgnoreCase)),
-            allFindings.Count(f => f.Severity.Equals("Medium", StringComparison.OrdinalIgnoreCase)),
+            allResults.Count, passCount, failCount,
+            allFindings.Count, critCount, highCount, medCount,
             historyEntries.Count,
-            historyEntries.FirstOrDefault()?.RunDate.Ticks ?? 0,
+            historyEntries.Count > 0 ? historyEntries[0].RunDate.Ticks : 0,
             latestInventory.ForestName,
             latestInventory.DomainControllerCount,
             latestTelemetry.TotalServices);
@@ -106,13 +119,10 @@ public partial class MainWindow
         }
 
         int configuredControllers = CountConfiguredDomainControllers();
-        int passingTests = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-        List<AdHealthFinding> activeFindings = GetActiveFindings().ToList();
-        int criticalFindings = activeFindings.Count(f => f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase));
+        int passingTests = passCount;
+        int criticalFindings = critCount;
         int healthScore = CalculateHealthScore();
-        int highOrAboveFindings = activeFindings.Count(f =>
-            f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
-            f.Severity.Equals("High", StringComparison.OrdinalIgnoreCase));
+        int highOrAboveFindings = critCount + highCount;
 
         if (_HealthTab != null)
         {
@@ -158,7 +168,7 @@ public partial class MainWindow
         }
         if (_FindingsTab != null)
         {
-            FindingsOpenCountText.Text = activeFindings.Count.ToString(CultureInfo.InvariantCulture);
+            FindingsOpenCountText.Text = (critCount + highCount + medCount + lowCount).ToString(CultureInfo.InvariantCulture);
             FindingsHighCountText.Text = highOrAboveFindings.ToString(CultureInfo.InvariantCulture);
             FindingsCriticalCountText.Text = criticalFindings.ToString(CultureInfo.InvariantCulture);
         }
@@ -177,7 +187,7 @@ public partial class MainWindow
         {
             UpdateSecurityGrid();
         }
-        RefreshHomeFindingsSummary();
+        RefreshHomeFindingsSummary(critCount, highCount, medCount, lowCount);
         if (MainTabControl.SelectedIndex == 0)
         {
             RefreshHomeRunHistoryBars();
@@ -207,14 +217,20 @@ public partial class MainWindow
     private void RefreshHomeRunHistoryBars()
     {
         HomeRunHistoryBars.Children.Clear();
-        var recent = historyEntries.OrderByDescending(h => h.RunDate).Take(6).Reverse().ToList();
-        if (recent.Count == 0) return;
-
-        double maxCount = Math.Max(1, recent.Max(h => Math.Max(h.Passed, h.Failed)));
+        // historyEntries is already sorted descending; take 6 newest then reverse for left-to-right display.
+        int takeCount = Math.Min(6, historyEntries.Count);
+        if (takeCount == 0) return;
+        double maxCount = 1;
+        for (int i = 0; i < takeCount; i++)
+        {
+            maxCount = Math.Max(maxCount, Math.Max(historyEntries[i].Passed, historyEntries[i].Failed));
+        }
         double barMaxHeight = 90;
 
-        foreach (var entry in recent)
+        // Iterate in reverse (oldest→newest) for left-to-right bar display.
+        for (int i = takeCount - 1; i >= 0; i--)
         {
+            var entry = historyEntries[i];
             double passHeight = entry.Passed * barMaxHeight / maxCount;
             double failHeight = entry.Failed * barMaxHeight / maxCount;
 
@@ -263,18 +279,19 @@ public partial class MainWindow
 
     private void RefreshHomeTrendPolyline()
     {
-        var recent = historyEntries.OrderByDescending(h => h.RunDate).Take(10).Reverse().ToList();
-        if (recent.Count < 1) return;
+        // historyEntries is already sorted descending; take 10 newest and iterate in reverse for left-to-right.
+        int takeCount = Math.Min(10, historyEntries.Count);
+        if (takeCount < 1) return;
 
         PointCollection points = new();
         double w = 120;
         double h = 60;
-        int n = recent.Count;
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < takeCount; i++)
         {
-            double x = i * w / Math.Max(1, n - 1);
-            double rate = recent[i].Total > 0
-                ? (double)recent[i].Passed / recent[i].Total
+            int idx = takeCount - 1 - i; // reverse: oldest at i=0, newest at i=takeCount-1
+            double x = i * w / Math.Max(1, takeCount - 1);
+            double rate = historyEntries[idx].Total > 0
+                ? (double)historyEntries[idx].Passed / historyEntries[idx].Total
                 : 0.5;
             double y = h - (rate * h * 0.8 + h * 0.1);
             points.Add(new Point(x, y));
@@ -282,14 +299,9 @@ public partial class MainWindow
         HomeTrendPolyline.Points = points;
     }
 
-    private void RefreshHomeFindingsSummary()
+    private void RefreshHomeFindingsSummary(int crit, int high, int med, int low)
     {
         HomeFindingsSummary.Children.Clear();
-
-        int crit = allFindings.Count(f => f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase));
-        int high = allFindings.Count(f => f.Severity.Equals("High", StringComparison.OrdinalIgnoreCase));
-        int med = allFindings.Count(f => f.Severity.Equals("Medium", StringComparison.OrdinalIgnoreCase));
-        int low = allFindings.Count(f => f.Severity.Equals("Low", StringComparison.OrdinalIgnoreCase));
 
         void AddRow(string label, int count, Brush color)
         {
