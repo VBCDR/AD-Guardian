@@ -402,9 +402,8 @@ public partial class MainWindow
         int crit = 0, high = 0, med = 0, low = 0;
         for (int i = 0; i < allFindings.Count; i++)
         {
-            // Match GetActiveFindings(): exclude "Info" severity.
             string sev = allFindings[i].Severity;
-            if (sev.Equals("Info", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!IsActiveSeverity(sev)) continue;
             if (sev.Equals("Critical", StringComparison.OrdinalIgnoreCase)) crit++;
             else if (sev.Equals("High", StringComparison.OrdinalIgnoreCase)) high++;
             else if (sev.Equals("Medium", StringComparison.OrdinalIgnoreCase)) med++;

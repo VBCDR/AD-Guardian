@@ -90,9 +90,20 @@ public partial class MainWindow
             finding.LogFilePath ?? string.Empty);
     }
 
+    /// <summary>
+    /// Returns true when the severity represents an actionable finding
+    /// (i.e. not informational/passing). Used by dashboard snapshot,
+    /// summary text, and active-finding filters to keep the "Info"
+    /// exclusion in one place.
+    /// </summary>
+    internal static bool IsActiveSeverity(string severity)
+    {
+        return !severity.Equals("Info", StringComparison.OrdinalIgnoreCase);
+    }
+
     private IEnumerable<AdHealthFinding> GetActiveFindings()
     {
-        return allFindings.Where(f => !f.Severity.Equals("Info", StringComparison.OrdinalIgnoreCase));
+        return allFindings.Where(f => IsActiveSeverity(f.Severity));
     }
 
     internal static string InferCategory(string service)

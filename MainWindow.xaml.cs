@@ -291,7 +291,7 @@ public partial class MainWindow : Window, IDisposable
         int activeFindings = 0;
         for (int i = 0; i < allFindings.Count; i++)
         {
-            if (!allFindings[i].Severity.Equals("Info", StringComparison.OrdinalIgnoreCase)) activeFindings++;
+            if (IsActiveSeverity(allFindings[i].Severity)) activeFindings++;
         }
 
         HealthSummaryText.Text =
