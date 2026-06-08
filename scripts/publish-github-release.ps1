@@ -5,6 +5,7 @@ param(
 
     [string]$Title,
     [string]$Notes = "",
+    [string]$InstallerPath,
     [switch]$Draft,
     [switch]$Latest
 )
@@ -12,13 +13,24 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$installerReleaseDir = Join-Path (Split-Path -Parent $repoRoot) "AD Guardian Installer\Release"
-$installerPath = Join-Path $installerReleaseDir "AD Guardian Installer.exe"
 $uploadAssetPath = Join-Path $env:TEMP "AD.Guardian.Installer.exe"
 
-if (-not (Test-Path $installerPath)) {
-    throw "Installer not found at '$installerPath'. Build it first."
+# Resolve the installer path: use explicit param, or check both candidate locations
+if ($InstallerPath -and (Test-Path $InstallerPath)) {
+    $resolvedInstaller = $InstallerPath
+} else {
+    $candidates = @(
+        (Join-Path (Split-Path -Parent $repoRoot) "AD Guardian Installer\Release\AD Guardian Installer.exe"),
+        (Join-Path $repoRoot "installer\Release\AD Guardian Installer.exe")
+    )
+    $resolvedInstaller = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
+
+if (-not $resolvedInstaller) {
+    throw "Installer not found. Build it first with build-distributions.ps1, or pass -InstallerPath."
+}
+
+Copy-Item -LiteralPath $resolvedInstaller -Destination $uploadAssetPath -Force
 
 Copy-Item -LiteralPath $installerPath -Destination $uploadAssetPath -Force
 
