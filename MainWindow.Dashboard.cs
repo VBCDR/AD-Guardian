@@ -121,7 +121,7 @@ public partial class MainWindow
         int configuredControllers = CountConfiguredDomainControllers();
         int passingTests = passCount;
         int criticalFindings = critCount;
-        int healthScore = CalculateHealthScore();
+        int healthScore = CalculateHealthScore(critCount, highCount, medCount);
         int highOrAboveFindings = critCount + highCount;
 
         if (_HealthTab != null)
@@ -504,25 +504,52 @@ public partial class MainWindow
         AddRow("Low", low, LowSeverityBrushCached);
     }
 
+    /// <summary>
+    /// Convenience overload that computes severity counts from allFindings.
+    /// Prefer the parameterized overload when counts are already available.
+    /// </summary>
     private int CalculateHealthScore()
     {
+        int crit = 0, high = 0, med = 0;
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            string sev = allFindings[i].Severity;
+            if (sev.Equals("Critical", StringComparison.OrdinalIgnoreCase)) crit++;
+            else if (sev.Equals("High", StringComparison.OrdinalIgnoreCase)) high++;
+            else if (sev.Equals("Medium", StringComparison.OrdinalIgnoreCase)) med++;
+        }
+        return CalculateHealthScore(crit, high, med);
+    }
+
+    /// <summary>
+    /// Calculates the health score using pre-computed severity counts.
+    /// Avoids redundant LINQ scans when counts are already computed by the caller.
+    /// </summary>
+    private int CalculateHealthScore(int critical, int high, int medium)
+    {
         double currentPassRate = 100;
-        TestHistoryEntry? latestRun = historyEntries.FirstOrDefault();
+        TestHistoryEntry? latestRun = historyEntries.Count > 0 ? historyEntries[0] : null;
         if (latestRun != null && latestRun.Total > 0)
         {
             currentPassRate = (double)latestRun.Passed / latestRun.Total * 100;
         }
 
         double trendAvg = 100;
-        var recentRuns = historyEntries.Take(5).Where(h => h.Total > 0).ToList();
-        if (recentRuns.Count > 0)
+        int trendCount = Math.Min(5, historyEntries.Count);
+        double trendSum = 0;
+        int trendDiv = 0;
+        for (int i = 0; i < trendCount; i++)
         {
-            trendAvg = recentRuns.Average(h => (double)h.Passed / h.Total * 100);
+            if (historyEntries[i].Total > 0)
+            {
+                trendSum += (double)historyEntries[i].Passed / historyEntries[i].Total * 100;
+                trendDiv++;
+            }
         }
-
-        int critical = allFindings.Count(f => f.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase));
-        int high = allFindings.Count(f => f.Severity.Equals("High", StringComparison.OrdinalIgnoreCase));
-        int medium = allFindings.Count(f => f.Severity.Equals("Medium", StringComparison.OrdinalIgnoreCase));
+        if (trendDiv > 0)
+        {
+            trendAvg = trendSum / trendDiv;
+        }
 
         double findingsPenalty = Math.Min(30, critical * 10 + high * 5 + medium * 2);
         double findingsRatio = (100 - findingsPenalty) / 100;
