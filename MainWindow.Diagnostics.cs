@@ -345,7 +345,7 @@ public partial class MainWindow
                 (failed > 0 ? FormatTestResultTable(allResults, dcList, passColor, failColor) : string.Empty) +
                 "</div>";
 
-            string subject = failed > 0 ? "[FAILED] Test Completed - ADG Test Results" : "Test Completed - ADG Test Results";
+            string subject = failed > 0 ? "(FAILED) Test Completed - ADG Test Results" : "Test Completed - ADG Test Results";
             string emailAttachment = WriteResultsSummarySync(runSession, allResults, summary);
             if (sendEmailManual && !string.IsNullOrWhiteSpace(recipientEmail))
             {
@@ -500,29 +500,49 @@ public partial class MainWindow
                   "<th style='padding:6px 10px;text-align:left;border:1px solid #ddd;'>Status</th>" +
                   "<th style='padding:6px 10px;text-align:left;border:1px solid #ddd;'>Details</th></tr>");
 
-        foreach (string dc in dcList)
+        // Iterate the actual server groups found in results, not just the user-entered
+        // dcList. Parsed server names (from dcdiag output) may differ from short names
+        // (e.g. "DC01.corp.local" vs "DC01"), and exact-match lookups would silently
+        // drop results for DCs with name mismatches.
+        List<string> sortedKeys = new(byServer.Keys);
+        // Sort: user-listed DCs first (by partial match), then alphabetically.
+        sortedKeys.Sort((a, b) =>
         {
-            if (byServer.TryGetValue(dc, out List<TestResult>? dcResults))
+            bool aMatchesUser = false, bMatchesUser = false;
+            for (int j = 0; j < dcList.Length; j++)
             {
-                if (dcList.Length > 1)
-                {
-                    sb.Append($"<tr style='background:#e8eaf6;'><td colspan='3' style='padding:6px 10px;border:1px solid #ddd;font-weight:bold;color:#283593;'>DC: {System.Net.WebUtility.HtmlEncode(dc)}</td></tr>");
-                }
+                if (a.StartsWith(dcList[j], StringComparison.OrdinalIgnoreCase) ||
+                    dcList[j].StartsWith(a, StringComparison.OrdinalIgnoreCase))
+                    aMatchesUser = true;
+                if (b.StartsWith(dcList[j], StringComparison.OrdinalIgnoreCase) ||
+                    dcList[j].StartsWith(b, StringComparison.OrdinalIgnoreCase))
+                    bMatchesUser = true;
+            }
+            if (aMatchesUser != bMatchesUser) return aMatchesUser ? -1 : 1;
+            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+        });
 
-                foreach (TestResult r in dcResults)
-                {
-                    bool isPass = string.Equals(r.Result, "PASS", StringComparison.OrdinalIgnoreCase);
-                    string bgColor = isPass ? "#f0fdf0" : "#fef2f2";
-                    string textColor = isPass ? passColor : failColor;
-                    string label = isPass ? "✓ Pass" : "✗ Fail";
-                    string display = (r.Server != null && !string.Equals(r.Server, dc, StringComparison.OrdinalIgnoreCase))
-                        ? $"{r.Service} ({r.Server})"
-                        : r.Service ?? "";
-                    string detail = (r.Message ?? "").Length > 80 ? r.Message![..80] + "…" : r.Message ?? "";
-                    sb.Append($"<tr style='background:{bgColor};'><td style='padding:4px 10px;border:1px solid #ddd;'>{System.Net.WebUtility.HtmlEncode(display)}</td>" +
-                              $"<td style='padding:4px 10px;border:1px solid #ddd;color:{textColor};font-weight:bold;'>{label}</td>" +
-                              $"<td style='padding:4px 10px;border:1px solid #ddd;'>{System.Net.WebUtility.HtmlEncode(detail)}</td></tr>");
-                }
+        foreach (string serverKey in sortedKeys)
+        {
+            List<TestResult> dcResults = byServer[serverKey];
+            if (byServer.Count > 1)
+            {
+                sb.Append($"<tr style='background:#e8eaf6;'><td colspan='3' style='padding:6px 10px;border:1px solid #ddd;font-weight:bold;color:#283593;'>DC: {System.Net.WebUtility.HtmlEncode(serverKey)}</td></tr>");
+            }
+
+            foreach (TestResult r in dcResults)
+            {
+                bool isPass = string.Equals(r.Result, "PASS", StringComparison.OrdinalIgnoreCase);
+                string bgColor = isPass ? "#f0fdf0" : "#fef2f2";
+                string textColor = isPass ? passColor : failColor;
+                string label = isPass ? "✓ Pass" : "✗ Fail";
+                string display = (r.Server != null && !string.Equals(r.Server, serverKey, StringComparison.OrdinalIgnoreCase))
+                    ? $"{r.Service} ({r.Server})"
+                    : r.Service ?? "";
+                string detail = (r.Message ?? "").Length > 80 ? r.Message![..80] + "…" : r.Message ?? "";
+                sb.Append($"<tr style='background:{bgColor};'><td style='padding:4px 10px;border:1px solid #ddd;'>{System.Net.WebUtility.HtmlEncode(display)}</td>" +
+                          $"<td style='padding:4px 10px;border:1px solid #ddd;color:{textColor};font-weight:bold;'>{label}</td>" +
+                          $"<td style='padding:4px 10px;border:1px solid #ddd;'>{System.Net.WebUtility.HtmlEncode(detail)}</td></tr>");
             }
         }
 

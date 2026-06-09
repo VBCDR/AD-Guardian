@@ -135,7 +135,7 @@ public partial class MainWindow
             "</div>";
 
             string subject = failed > 0
-                ? $"[FAILED] Scheduled Test Completed - {scheduledTaskName}"
+                ? $"(FAILED) Scheduled Test Completed - {scheduledTaskName}"
                 : $"Scheduled Test Completed - {scheduledTaskName}";
 
             if (sendEmailScheduled && !string.IsNullOrWhiteSpace(recipientEmail))

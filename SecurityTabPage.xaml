@@ -157,7 +157,7 @@
                                         </Style>
                                     </DataGrid.Resources>
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="100">
+                                        <DataGridTextColumn Header="Severity" Binding="{Binding Severity}" Width="100" IsReadOnly="True">
                                             <DataGridTextColumn.ElementStyle>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -166,10 +166,10 @@
                                                 </Style>
                                             </DataGridTextColumn.ElementStyle>
                                         </DataGridTextColumn>
-                                        <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="130"/>
-                                        <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="200"/>
-                                        <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="*"/>
-                                        <DataGridTextColumn Header="Evidence" Binding="{Binding Evidence}" Width="*"/>
+                                        <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="130" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="200" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="*" IsReadOnly="True"/>
+                                        <DataGridTextColumn Header="Evidence" Binding="{Binding Evidence}" Width="*" IsReadOnly="True"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>

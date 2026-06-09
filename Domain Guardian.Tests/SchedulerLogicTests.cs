@@ -175,13 +175,13 @@ public class SchedulerLogicTests : IDisposable
 
     [Theory]
     [InlineData(0, "Scheduled Test Completed - Nightly Check")]
-    [InlineData(2, "[FAILED] Scheduled Test Completed - Nightly Check")]
+    [InlineData(2, "(FAILED) Scheduled Test Completed - Nightly Check")]
     public void ScheduledEmailSubject_FailedPrefixApplied(int failCount, string expected)
     {
         // Mirrors the subject logic in RunScheduledTestsAsync
         string taskName = "Nightly Check";
         string subject = failCount > 0
-            ? $"[FAILED] Scheduled Test Completed - {taskName}"
+            ? $"(FAILED) Scheduled Test Completed - {taskName}"
             : $"Scheduled Test Completed - {taskName}";
 
         Assert.Equal(expected, subject);
@@ -189,11 +189,11 @@ public class SchedulerLogicTests : IDisposable
 
     [Theory]
     [InlineData(0, "Test Completed - ADG Test Results")]
-    [InlineData(3, "[FAILED] Test Completed - ADG Test Results")]
+    [InlineData(3, "(FAILED) Test Completed - ADG Test Results")]
     public void ManualRunEmailSubject_FailedPrefixApplied(int failCount, string expected)
     {
         // Mirrors the subject logic in RunButton_Click
-        string subject = failCount > 0 ? "[FAILED] Test Completed - ADG Test Results" : "Test Completed - ADG Test Results";
+        string subject = failCount > 0 ? "(FAILED) Test Completed - ADG Test Results" : "Test Completed - ADG Test Results";
 
         Assert.Equal(expected, subject);
     }

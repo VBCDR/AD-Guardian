@@ -92,7 +92,7 @@ public partial class MainWindow
             else if (allResults[i].Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failCount++;
         }
 
-        int critCount = 0, highCount = 0, medCount = 0, lowCount = 0;
+        int critCount = 0, highCount = 0, medCount = 0, lowCount = 0, securityFindingCount = 0;
         for (int i = 0; i < allFindings.Count; i++)
         {
             string sev = allFindings[i].Severity;
@@ -100,6 +100,13 @@ public partial class MainWindow
             else if (sev.Equals("High", StringComparison.OrdinalIgnoreCase)) highCount++;
             else if (sev.Equals("Medium", StringComparison.OrdinalIgnoreCase)) medCount++;
             else if (sev.Equals("Low", StringComparison.OrdinalIgnoreCase)) lowCount++;
+
+            // Security finding count: matches IsSecurityFinding (Privilege/Telemetry category OR Critical/High severity)
+            if (sev.Equals("Critical", StringComparison.OrdinalIgnoreCase) ||
+                sev.Equals("High", StringComparison.OrdinalIgnoreCase) ||
+                allFindings[i].Category.Equals("Privilege", StringComparison.OrdinalIgnoreCase) ||
+                allFindings[i].Category.Equals("Telemetry", StringComparison.OrdinalIgnoreCase))
+                securityFindingCount++;
         }
 
         // Build hash with StringBuilder to avoid string.Join boxing on every 120ms tick.
@@ -113,7 +120,8 @@ public partial class MainWindow
             .Append(historyEntries.Count > 0 ? historyEntries[0].RunDate.Ticks : 0).Append('|')
             .Append(latestInventory.ForestName ?? "").Append('|')
             .Append(latestInventory.DomainControllerCount).Append('|')
-            .Append(latestTelemetry.TotalServices);
+            .Append(latestTelemetry.TotalServices).Append('|')
+            .Append(securityFindingCount);
         string newHash = hashBuilder.ToString();
         if (_dashboardHash == newHash) return;
         _dashboardHash = newHash;
@@ -169,7 +177,7 @@ public partial class MainWindow
         {
             PrivilegedInsightsText.Text = BuildPrivilegeInsightSummary();
             SecuritySummaryText.Text = latestTelemetry.TotalServices > 0
-                ? $"Security view includes {allFindings.Count(f => IsSecurityFinding(f))} security-oriented finding(s) across privilege and telemetry signals."
+                ? $"Security view includes {securityFindingCount} security-oriented finding(s) across privilege and telemetry signals."
                 : "Security findings are derived from privileged group breadth, failing directory tests, and service telemetry.";
         }
         if (_FindingsTab != null)

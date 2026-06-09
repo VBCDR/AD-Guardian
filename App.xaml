@@ -145,11 +145,6 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.15"/>
-                                <Setter TargetName="ContentBorder" Property="Effect">
-                                    <Setter.Value>
-                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.3" Color="Black"/>
-                                    </Setter.Value>
-                                </Setter>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.25"/>
@@ -387,66 +382,7 @@
             </Setter>
         </Style>
 
-        <Style x:Key="HeaderCheckBoxStyle" TargetType="CheckBox">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <Border x:Name="BoxBorder"
-                                Width="18" Height="18"
-                                CornerRadius="4"
-                                BorderBrush="#C7D5E2"
-                                BorderThickness="1"
-                                Background="White">
-                            <Path x:Name="CheckMark"
-                                   Data="M0,4 L3,7 L9.5,0"
-                                   Stroke="#1A73E8"
-                                   StrokeThickness="2.5"
-                                   StrokeLineJoin="Round"
-                                   StrokeEndLineCap="Round"
-                                   Opacity="0"
-                                   Stretch="None"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"/>
-                         </Border>
-                         <ControlTemplate.Triggers>
-                             <Trigger Property="IsChecked" Value="True">
-                                 <Trigger.EnterActions>
-                                     <BeginStoryboard>
-                                         <Storyboard>
-                                             <DoubleAnimation Storyboard.TargetName="CheckMark"
-                                                              Storyboard.TargetProperty="Opacity"
-                                                              From="0" To="1"
-                                                              Duration="0:0:0.15"/>
-                                             <ColorAnimation Storyboard.TargetName="BoxBorder"
-                                                             Storyboard.TargetProperty="BorderBrush.Color"
-                                                             To="#1A73E8"
-                                                             Duration="0:0:0.15"/>
-                                         </Storyboard>
-                                     </BeginStoryboard>
-                                 </Trigger.EnterActions>
-                                 <Trigger.ExitActions>
-                                     <BeginStoryboard>
-                                         <Storyboard FillBehavior="Stop">
-                                             <DoubleAnimation Storyboard.TargetName="CheckMark"
-                                                              Storyboard.TargetProperty="Opacity"
-                                                              From="1" To="0"
-                                                              Duration="0:0:0.1"/>
-                                             <ColorAnimation Storyboard.TargetName="BoxBorder"
-                                                             Storyboard.TargetProperty="BorderBrush.Color"
-                                                             To="#C7D5E2"
-                                                             Duration="0:0:0.1"/>
-                                         </Storyboard>
-                                     </BeginStoryboard>
-                                 </Trigger.ExitActions>
-                             </Trigger>
-
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="RowCheckBoxStyle" TargetType="CheckBox">
+        <Style x:Key="InlineCheckBoxBaseStyle" TargetType="CheckBox">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
@@ -503,6 +439,9 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="HeaderCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource InlineCheckBoxBaseStyle}"/>
+        <Style x:Key="RowCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource InlineCheckBoxBaseStyle}"/>
 
         <Style x:Key="SettingsCheckBoxStyle" TargetType="CheckBox">
             <Setter Property="Template">
@@ -645,23 +584,6 @@
                                                            VerticalAlignment="Top"
                                                            Height="3"/>
                                             </Grid>
-                                        </Border>
-                                        <Border x:Name="AnimationOverlay"
-                                                Background="#28FFFFFF"
-                                                CornerRadius="5"
-                                                HorizontalAlignment="Left"
-                                                Opacity="0">
-                                            <Border.Triggers>
-                                                <EventTrigger RoutedEvent="Loaded">
-                                                    <BeginStoryboard>
-                                                        <Storyboard RepeatBehavior="Forever">
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                             From="0.08" To="0.28" Duration="0:0:0.9"
-                                                                             AutoReverse="True"/>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </EventTrigger>
-                                            </Border.Triggers>
                                         </Border>
                                     </Grid>
                                 </Border>

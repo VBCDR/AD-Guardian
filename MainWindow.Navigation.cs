@@ -88,21 +88,34 @@ public partial class MainWindow
         NavigateToSection(4);
     }
 
+    // Pre-allocated objects for HomeCard hover effects — reused instead of allocating on every mouse enter.
+    // DropShadowEffect is frozen so it can be safely shared across the 3 Home cards.
+    private static readonly DropShadowEffect HomeCardHoverShadow;
+    private static readonly TranslateTransform HomeCardHoverTransform = new(0, -3);
+    private static readonly Point HomeCardRenderOrigin = new(0.5, 0.5);
+
+    static MainWindow()
+    {
+        HomeCardHoverShadow = new DropShadowEffect
+        {
+            BlurRadius = 12,
+            ShadowDepth = 4,
+            Opacity = 0.25,
+            Color = Colors.Black
+        };
+        HomeCardHoverShadow.Freeze();
+        HomeCardHoverTransform.Freeze();
+    }
+
     private void HomeCard_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
         if (sender is Border card && card.Parent is Grid parentGrid &&
             parentGrid.Children.Count > 0 && parentGrid.Children[0] is Border overlay)
         {
             overlay.Opacity = 0.08;
-            card.Effect = new System.Windows.Media.Effects.DropShadowEffect
-            {
-                BlurRadius = 12,
-                ShadowDepth = 4,
-                Opacity = 0.25,
-                Color = System.Windows.Media.Colors.Black
-            };
-            parentGrid.RenderTransform = new System.Windows.Media.TranslateTransform(0, -3);
-            parentGrid.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+            card.Effect = HomeCardHoverShadow;
+            parentGrid.RenderTransform = HomeCardHoverTransform;
+            parentGrid.RenderTransformOrigin = HomeCardRenderOrigin;
         }
     }
 

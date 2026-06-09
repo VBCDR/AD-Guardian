@@ -120,7 +120,7 @@ public partial class MainWindow
                 IsBodyHtml = true
             };
 
-            bool isFailed = subject.Contains("[FAILED]", StringComparison.OrdinalIgnoreCase);
+            bool isFailed = subject.Contains("(FAILED)", StringComparison.OrdinalIgnoreCase);
             string headerColor = isFailed ? "#C62828" : "#2E7D32";
             string headerBg = isFailed ? "#FFEBEE" : "#E8F5E9";
             string statusText = isFailed ? "Some tests failed — review the details below." : "All tests completed successfully.";
