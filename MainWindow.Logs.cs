@@ -339,18 +339,20 @@ public partial class MainWindow
             string? currentControllerSelection = LogsDcFilter.SelectedItem as string;
             string? currentResultSelection = LogsResultFilter.SelectedItem as string;
             string? currentSectionSelection = LogsSectionFilter.SelectedItem as string;
-            List<string> servers = logResultItems
-                .Select(result => result.Server)
-                .Where(server => !string.IsNullOrWhiteSpace(server))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(server => server, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            List<string> services = logResultItems
-                .Select(result => result.Service)
-                .Where(service => !string.IsNullOrWhiteSpace(service))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(service => service, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            // Manual distinct+sort: avoids LINQ Select/Where/Distinct/OrderBy/ToList allocations
+            HashSet<string> serverSet = new(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> serviceSet = new(StringComparer.OrdinalIgnoreCase);
+            foreach (TestResult r in logResultItems)
+            {
+                if (!string.IsNullOrWhiteSpace(r.Server))
+                    serverSet.Add(r.Server);
+                if (!string.IsNullOrWhiteSpace(r.Service))
+                    serviceSet.Add(r.Service);
+            }
+            List<string> servers = new(serverSet);
+            servers.Sort(StringComparer.OrdinalIgnoreCase);
+            List<string> services = new(serviceSet);
+            services.Sort(StringComparer.OrdinalIgnoreCase);
 
             LogsDcFilter.Items.Clear();
             LogsDcFilter.Items.Add("All domain controllers");
@@ -747,9 +749,15 @@ public partial class MainWindow
                 continue;
             }
 
-            string? inferredServer = sections[i].Lines
-                .Select(logLine => TryExtractControllerFromResultLine(logLine.Trim()) ?? TryParseServerFromLogLine(logLine.Trim()))
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            string? inferredServer = null;
+            // Manual loop: avoids LINQ Select/FirstOrDefault delegate allocations
+            foreach (string logLine in sections[i].Lines)
+            {
+                string trimmed = logLine.Trim();
+                inferredServer = TryExtractControllerFromResultLine(trimmed) ?? TryParseServerFromLogLine(trimmed);
+                if (!string.IsNullOrWhiteSpace(inferredServer))
+                    break;
+            }
 
             if (!string.IsNullOrWhiteSpace(inferredServer))
             {

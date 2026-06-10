@@ -65,14 +65,26 @@ public partial class MainWindow
 
         allFindings.AddRange(latestInventory.Findings);
         allFindings.AddRange(latestTelemetry.Findings);
-        List<AdHealthFinding> deduplicatedFindings = allFindings
-            .GroupBy(BuildFindingKey, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .OrderByDescending(finding => SeverityRank(finding.Severity))
-            .ThenBy(finding => finding.Category, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(finding => finding.Target, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(finding => finding.Summary, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        // Manual dedup + sort: avoids LINQ GroupBy/Select/OrderByDescending/ThenBy/ToList
+        // allocations on every findings rebuild.
+        Dictionary<string, AdHealthFinding> dedup = new(allFindings.Count, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            string key = BuildFindingKey(allFindings[i]);
+            dedup.TryAdd(key, allFindings[i]);
+        }
+
+        List<AdHealthFinding> deduplicatedFindings = new(dedup.Values);
+        deduplicatedFindings.Sort((a, b) =>
+        {
+            int cmp = SeverityRank(b.Severity).CompareTo(SeverityRank(a.Severity)); // descending
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.Category, b.Category, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.Target, b.Target, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+            return string.Compare(a.Summary, b.Summary, StringComparison.OrdinalIgnoreCase);
+        });
         allFindings.Clear();
         allFindings.AddRange(deduplicatedFindings);
         SyncFindingItems();
@@ -207,15 +219,28 @@ public partial class MainWindow
             return;
         }
 
-        List<AdHealthFinding> securityFindings = allFindings
-            .Where(IsSecurityFinding)
-            .OrderByDescending(f => SeverityRank(f.Severity))
-            .ToList();
+        // Manual filter + sort + count: avoids LINQ Where/OrderByDescending/ToList/Count allocations
+        List<AdHealthFinding> securityFindings = new();
+        int critical = 0, high = 0;
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            AdHealthFinding f = allFindings[i];
+            if (!IsSecurityFinding(f))
+                continue;
+            securityFindings.Add(f);
+            if (f.Severity == "Critical") critical++;
+            else if (f.Severity == "High") high++;
+        }
+        securityFindings.Sort((a, b) => SeverityRank(b.Severity).CompareTo(SeverityRank(a.Severity)));
         ReplaceCollection(securityFindingItems, securityFindings);
 
-        int critical = securityFindings.Count(f => f.Severity == "Critical");
-        int high = securityFindings.Count(f => f.Severity == "High");
-        int totalPrivGroups = latestInventory?.PrivilegedGroupCounts?.Values?.Sum() ?? 0;
+        // Manual sum: avoids LINQ .Values.Sum()
+        int totalPrivGroups = 0;
+        if (latestInventory?.PrivilegedGroupCounts != null)
+        {
+            foreach (int v in latestInventory.PrivilegedGroupCounts.Values)
+                totalPrivGroups += v;
+        }
 
         SecurityTotalFindingsText.Text = securityFindings.Count.ToString(CultureInfo.InvariantCulture);
         SecurityCriticalText.Text = critical.ToString(CultureInfo.InvariantCulture);
@@ -230,11 +255,19 @@ public partial class MainWindow
             return "Privilege analysis will appear after a collection runs.";
         }
 
-        IEnumerable<string> highlights = latestInventory.PrivilegedGroupCounts
-            .Where(pair => pair.Value >= 0)
-            .OrderByDescending(pair => pair.Value)
-            .Take(3)
-            .Select(pair => $"{pair.Key}: {pair.Value}");
+        // Manual filter + sort + take: avoids LINQ Where/OrderByDescending/Take/Select allocations
+        List<KeyValuePair<string, int>> positiveGroups = new(latestInventory.PrivilegedGroupCounts.Count);
+        foreach (var pair in latestInventory.PrivilegedGroupCounts)
+        {
+            if (pair.Value >= 0)
+                positiveGroups.Add(pair);
+        }
+        positiveGroups.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+        int take = Math.Min(3, positiveGroups.Count);
+        string[] highlights = new string[take];
+        for (int i = 0; i < take; i++)
+            highlights[i] = $"{positiveGroups[i].Key}: {positiveGroups[i].Value}";
 
         return "Top privileged groups by member count: " + string.Join(" | ", highlights);
     }

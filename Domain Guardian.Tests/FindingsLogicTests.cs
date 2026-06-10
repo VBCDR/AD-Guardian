@@ -343,14 +343,26 @@ public class FindingsLogicTests
             allFindings.AddRange(telemetryFindings);
 
         // Deduplicate and sort (same logic as RebuildFindings)
-        return allFindings
-            .GroupBy(MainWindow.BuildFindingKey, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .OrderByDescending(f => MainWindow.SeverityRank(f.Severity))
-            .ThenBy(f => f.Category, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(f => f.Target, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(f => f.Summary, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        Dictionary<string, AdHealthFinding> dedup = new(allFindings.Count, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            string key = MainWindow.BuildFindingKey(allFindings[i]);
+            dedup.TryAdd(key, allFindings[i]);
+        }
+
+        List<AdHealthFinding> deduplicated = new(dedup.Values);
+        deduplicated.Sort((a, b) =>
+        {
+            int cmp = MainWindow.SeverityRank(b.Severity).CompareTo(MainWindow.SeverityRank(a.Severity));
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.Category, b.Category, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+            cmp = string.Compare(a.Target, b.Target, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+            return string.Compare(a.Summary, b.Summary, StringComparison.OrdinalIgnoreCase);
+        });
+
+        return deduplicated;
     }
 
     [Fact]

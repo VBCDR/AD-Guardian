@@ -47,11 +47,16 @@ public partial class MainWindow
 
         try
         {
-            string[] dcList = domainControllers
-                .Split(',')
-                .Select(dc => dc.Trim())
-                .Where(dc => !string.IsNullOrWhiteSpace(dc))
-                .ToArray();
+            // Manual split+trim+filter: avoids LINQ Select/Where/ToArray allocations
+            string[] dcParts = domainControllers.Split(',');
+            List<string> dcListTemp = new(dcParts.Length);
+            for (int i = 0; i < dcParts.Length; i++)
+            {
+                string trimmed = dcParts[i].Trim();
+                if (!string.IsNullOrWhiteSpace(trimmed))
+                    dcListTemp.Add(trimmed);
+            }
+            string[] dcList = dcListTemp.ToArray();
 
             List<string> logFilePaths = new();
             RunLogSession runSession = CreateRunLogSession(runStartedAt, scheduledTaskName);
@@ -112,7 +117,7 @@ public partial class MainWindow
         latestLogsText = File.Exists(combinedLogPath) ? await File.ReadAllTextAsync(combinedLogPath, token).ConfigureAwait(true) : string.Empty;
         isLogContentReady = true;
 
-        if (!allResults.Any())
+        if (allResults.Count == 0)
         {
             return;
         }
@@ -360,11 +365,16 @@ public partial class MainWindow
     internal async void SchedulerSaveButton_Click(object sender, RoutedEventArgs e)
     {
         string taskName = SchedulerTaskName.Text.Trim();
-        List<string> dcEntries = SchedulerDomainControllers.Text.Trim()
-            .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(dc => dc.Trim())
-            .Where(dc => !string.IsNullOrEmpty(dc))
-            .ToList();
+        // Manual split+trim+filter: avoids LINQ Select/Where/ToList allocations
+        string[] dcParts = SchedulerDomainControllers.Text.Trim()
+            .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+        List<string> dcEntries = new(dcParts.Length);
+        for (int i = 0; i < dcParts.Length; i++)
+        {
+            string trimmed = dcParts[i].Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+                dcEntries.Add(trimmed);
+        }
 
         if (dcEntries.Count == 0)
         {

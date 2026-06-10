@@ -172,11 +172,16 @@ public partial class MainWindow
         allResults.Clear();
         List<string> logFilePaths = new();
         RunLogSession runSession = CreateRunLogSession(runStartedAt, "Manual");
-        string[] dcList = domainControllers
-            .Split(',')
-            .Select(dc => dc.Trim())
-            .Where(dc => !string.IsNullOrWhiteSpace(dc))
-            .ToArray();
+        // Manual split+trim+filter: avoids LINQ Select/Where/ToArray allocations
+        string[] dcParts = domainControllers.Split(',');
+        List<string> dcListTemp = new(dcParts.Length);
+        for (int i = 0; i < dcParts.Length; i++)
+        {
+            string trimmed = dcParts[i].Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed))
+                dcListTemp.Add(trimmed);
+        }
+        string[] dcList = dcListTemp.ToArray();
 
         int optionalTestCount = 0;
         if (testDnsCheck) optionalTestCount++;
@@ -312,7 +317,7 @@ public partial class MainWindow
                 completedSteps,
                 totalSteps);
 
-            if (!allResults.Any())
+            if (allResults.Count == 0)
             {
                 return;
             }
@@ -450,8 +455,10 @@ public partial class MainWindow
     private static async Task WriteCombinedLogAsync(IEnumerable<string> logFilePaths, string combinedLogPath, CancellationToken token)
     {
         await using StreamWriter writer = new(combinedLogPath, false);
-        foreach (string path in logFilePaths.Where(File.Exists))
+        foreach (string path in logFilePaths)
         {
+            if (!File.Exists(path))
+                continue;
             token.ThrowIfCancellationRequested();
             await writer.WriteLineAsync($"---- Results for DC: {Path.GetFileNameWithoutExtension(path)} ----");
             string contents = await File.ReadAllTextAsync(path, token).ConfigureAwait(false);

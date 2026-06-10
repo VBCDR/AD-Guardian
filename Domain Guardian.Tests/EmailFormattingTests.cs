@@ -170,11 +170,13 @@ public class EmailFormattingTests
     [Fact]
     public void FormatTestResultTable_HtmlEncodesServerNames()
     {
+        // Use two servers so the DC group header renders (single-server groups suppress it)
         var results = new List<TestResult>
         {
-            new() { Service = "Connectivity", Server = "DC01<script>", Result = "PASS", Message = "ok" }
+            new() { Service = "Connectivity", Server = "DC01<script>", Result = "PASS", Message = "ok" },
+            new() { Service = "Connectivity", Server = "DC02", Result = "PASS", Message = "ok" },
         };
-        string[] dcList = { "DC01" };
+        string[] dcList = { "DC01", "DC02" };
 
         string html = FormatTestResultTable(results, dcList, "#2E7D32", "#C62828");
 

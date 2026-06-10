@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using AdHealthMonitor;
 using Xunit;
@@ -646,4 +648,141 @@ public class SchedulerLogicTests : IDisposable
 
         Assert.Empty(dcEntries);
     }
+
+    // ── RemoveOldestScheduledLogCacheEntry tests ──────────────────────────
+
+    /// <summary>
+    /// Creates a Dictionary{string, CachedScheduledLog} via reflection since
+    /// CachedScheduledLog is a private sealed nested class.
+    /// </summary>
+    private static System.Collections.IDictionary CreateCacheDictionary()
+    {
+        var logEntryType = typeof(MainWindow).GetNestedType(
+            "CachedScheduledLog", BindingFlags.NonPublic)!;
+        var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), logEntryType);
+        return (System.Collections.IDictionary)Activator.CreateInstance(
+            dictType, new object[] { StringComparer.OrdinalIgnoreCase })!;
+    }
+
+    private static void InvokeRemoveOldestScheduledLogCacheEntry(object instance)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "RemoveOldestScheduledLogCacheEntry",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+        method!.Invoke(instance, null);
+    }
+
+    private static object CreateCachedLogEntry(DateTime lastWriteUtc)
+    {
+        var logEntryType = typeof(MainWindow).GetNestedType(
+            "CachedScheduledLog", BindingFlags.NonPublic)!;
+        var entry = FormatterServices.GetUninitializedObject(logEntryType);
+        logEntryType.GetProperty("LastWriteUtc")!.SetValue(entry, lastWriteUtc);
+        return entry;
+    }
+
+    [Fact]
+    public void RemoveOldestScheduledLogCacheEntry_EmptyCache_NoOp()
+    {
+        var window = (MainWindow)FormatterServices.GetUninitializedObject(typeof(MainWindow));
+        var cacheField = typeof(MainWindow).GetField(
+            "scheduledLogCache", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(cacheField);
+
+        var cache = CreateCacheDictionary();
+        cacheField.SetValue(window, cache);
+
+        var ex = Record.Exception(() => InvokeRemoveOldestScheduledLogCacheEntry(window));
+        Assert.Null(ex);
+        Assert.Equal(0, cache.Count);
+    }
+
+    [Fact]
+    public void RemoveOldestScheduledLogCacheEntry_SingleEntry_RemovesIt()
+    {
+        var window = (MainWindow)FormatterServices.GetUninitializedObject(typeof(MainWindow));
+        var cacheField = typeof(MainWindow).GetField(
+            "scheduledLogCache", BindingFlags.NonPublic | BindingFlags.Instance);
+        var cache = CreateCacheDictionary();
+        cache["log1.txt"] = CreateCachedLogEntry(new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+        cacheField.SetValue(window, cache);
+
+        InvokeRemoveOldestScheduledLogCacheEntry(window);
+
+        Assert.Equal(0, cache.Count);
+    }
+
+    [Fact]
+    public void RemoveOldestScheduledLogCacheEntry_MultipleEntries_RemovesOldest()
+    {
+        var window = (MainWindow)FormatterServices.GetUninitializedObject(typeof(MainWindow));
+        var cacheField = typeof(MainWindow).GetField(
+            "scheduledLogCache", BindingFlags.NonPublic | BindingFlags.Instance);
+        var cache = CreateCacheDictionary();
+
+        DateTime oldest = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        DateTime middle = new(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc);
+        DateTime newest = new(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        cache["oldest.txt"] = CreateCachedLogEntry(oldest);
+        cache["middle.txt"] = CreateCachedLogEntry(middle);
+        cache["newest.txt"] = CreateCachedLogEntry(newest);
+        cacheField.SetValue(window, cache);
+
+        InvokeRemoveOldestScheduledLogCacheEntry(window);
+
+        Assert.Equal(2, cache.Count);
+        Assert.False(cache.Contains("oldest.txt"));
+        Assert.True(cache.Contains("middle.txt"));
+        Assert.True(cache.Contains("newest.txt"));
+    }
+
+    [Fact]
+    public void RemoveOldestScheduledLogCacheEntry_TiedTimestamps_RemovesOne()
+    {
+        var window = (MainWindow)FormatterServices.GetUninitializedObject(typeof(MainWindow));
+        var cacheField = typeof(MainWindow).GetField(
+            "scheduledLogCache", BindingFlags.NonPublic | BindingFlags.Instance);
+        var cache = CreateCacheDictionary();
+
+        DateTime sameTime = new(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        cache["a.txt"] = CreateCachedLogEntry(sameTime);
+        cache["b.txt"] = CreateCachedLogEntry(sameTime);
+        cache["c.txt"] = CreateCachedLogEntry(sameTime);
+        cacheField.SetValue(window, cache);
+
+        InvokeRemoveOldestScheduledLogCacheEntry(window);
+
+        // Should remove exactly one entry (any, since all have same timestamp)
+        Assert.Equal(2, cache.Count);
+    }
+
+    [Fact]
+    public void RemoveOldestScheduledLogCacheEntry_TwentyEntries_EvictsOldestAndPreservesNewest()
+    {
+        var window = (MainWindow)FormatterServices.GetUninitializedObject(typeof(MainWindow));
+        var cacheField = typeof(MainWindow).GetField(
+            "scheduledLogCache", BindingFlags.NonPublic | BindingFlags.Instance);
+        var cache = CreateCacheDictionary();
+
+        // Fill to exactly 20 (the max before eviction triggers in LoadScheduledResultsFromLogAsync)
+        DateTime baseTime = new(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        for (int i = 0; i < 20; i++)
+        {
+            cache[$"log_{i:D2}.txt"] = CreateCachedLogEntry(baseTime.AddHours(i));
+        }
+        cacheField.SetValue(window, cache);
+
+        Assert.Equal(20, cache.Count);
+        Assert.True(cache.Contains("log_00.txt"));
+        Assert.True(cache.Contains("log_19.txt"));
+
+        InvokeRemoveOldestScheduledLogCacheEntry(window);
+
+        Assert.Equal(19, cache.Count);
+        Assert.False(cache.Contains("log_00.txt")); // oldest removed
+        Assert.True(cache.Contains("log_19.txt"));  // newest preserved
+    }
 }
+
