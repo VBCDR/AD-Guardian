@@ -94,6 +94,10 @@ public partial class MainWindow
     private static readonly TranslateTransform HomeCardHoverTransform = new(0, -3);
     private static readonly Point HomeCardRenderOrigin = new(0.5, 0.5);
 
+    // Pre-allocated easing functions for sidebar and group-toggle animations — reused per click.
+    private static readonly CircleEase SidebarEasing = new() { EasingMode = EasingMode.EaseInOut };
+    private static readonly QuadraticEase GroupToggleEasing = new() { EasingMode = EasingMode.EaseInOut };
+
     static MainWindow()
     {
         HomeCardHoverShadow = new DropShadowEffect
@@ -105,6 +109,8 @@ public partial class MainWindow
         };
         HomeCardHoverShadow.Freeze();
         HomeCardHoverTransform.Freeze();
+        SidebarEasing.Freeze();
+        GroupToggleEasing.Freeze();
     }
 
     private void HomeCard_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
@@ -225,13 +231,12 @@ public partial class MainWindow
 
                 if (expanded)
                 {
-                    double current = panel.ActualHeight > 0 ? panel.ActualHeight : panel.MaxHeight;
                     DoubleAnimation expandAnim = new()
                     {
                         From = 0,
                         To = 500,
                         Duration = TimeSpan.FromMilliseconds(200),
-                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+                        EasingFunction = GroupToggleEasing
                     };
                     panel.BeginAnimation(FrameworkElement.MaxHeightProperty, expandAnim);
                 }
@@ -243,7 +248,7 @@ public partial class MainWindow
                         From = startH,
                         To = 0,
                         Duration = TimeSpan.FromMilliseconds(200),
-                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+                        EasingFunction = GroupToggleEasing
                     };
                     panel.BeginAnimation(FrameworkElement.MaxHeightProperty, collapseAnim);
                 }
@@ -330,7 +335,7 @@ public partial class MainWindow
             From = fromW,
             To = targetWidth,
             Duration = TimeSpan.FromMilliseconds(300),
-            EasingFunction = new CircleEase { EasingMode = EasingMode.EaseInOut }
+            EasingFunction = SidebarEasing
         };
         SidebarPanel.BeginAnimation(FrameworkElement.WidthProperty, widthAnim);
 
@@ -344,7 +349,7 @@ public partial class MainWindow
                 From = fromO,
                 To = targetOpacity,
                 Duration = TimeSpan.FromMilliseconds(250),
-                EasingFunction = new CircleEase { EasingMode = EasingMode.EaseInOut }
+                EasingFunction = SidebarEasing
             };
             label.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
         }
@@ -356,7 +361,7 @@ public partial class MainWindow
             From = fromO2,
             To = targetOpacity,
             Duration = TimeSpan.FromMilliseconds(250),
-            EasingFunction = new CircleEase { EasingMode = EasingMode.EaseInOut }
+            EasingFunction = SidebarEasing
         };
         SidebarHeaderContent.BeginAnimation(UIElement.OpacityProperty, fadeContent);
         AnimateLabel(HomeNavLabel);

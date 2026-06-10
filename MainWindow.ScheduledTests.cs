@@ -118,8 +118,12 @@ public partial class MainWindow
         }
 
         int total = allResults.Count;
-        int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-        int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
+        int passed = 0, failed = 0;
+        for (int i = 0; i < total; i++)
+        {
+            if (allResults[i].Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passed++;
+            else if (allResults[i].Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failed++;
+        }
         string summary = BuildRunSummary(total, passed, failed, dcList);
         string emailAttachment = await WriteResultsSummaryAsync(runSession, allResults, summary, token).ConfigureAwait(true);
 

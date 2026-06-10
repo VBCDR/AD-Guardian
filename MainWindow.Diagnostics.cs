@@ -557,8 +557,12 @@ public partial class MainWindow
         string path = Path.Combine(session.RunDirectoryPath, "ResultsSummary.txt");
         try
         {
-            int serviceWidth = Math.Max(12, results.Any() ? results.Max(r => r.Service?.Length ?? 0) : 0);
-            int serverWidth = Math.Max(10, results.Any() ? results.Max(r => r.Server?.Length ?? 0) : 0);
+        int serviceWidth = 12, serverWidth = 10;
+        for (int i = 0; i < results.Count; i++)
+        {
+            serviceWidth = Math.Max(serviceWidth, results[i].Service?.Length ?? 0);
+            serverWidth = Math.Max(serverWidth, results[i].Server?.Length ?? 0);
+        }
             using StreamWriter writer = new(path, false);
             writer.WriteLine("AD Guardian - Test Results Summary");
             writer.WriteLine($"Run: {session.StartedAt:dd MMM yyyy HH:mm}");
@@ -583,8 +587,12 @@ public partial class MainWindow
         string path = Path.Combine(session.RunDirectoryPath, "ResultsSummary.txt");
         try
         {
-            int serviceWidth = Math.Max(12, results.Any() ? results.Max(r => r.Service?.Length ?? 0) : 0);
-            int serverWidth = Math.Max(10, results.Any() ? results.Max(r => r.Server?.Length ?? 0) : 0);
+        int serviceWidth = 12, serverWidth = 10;
+        for (int i = 0; i < results.Count; i++)
+        {
+            serviceWidth = Math.Max(serviceWidth, results[i].Service?.Length ?? 0);
+            serverWidth = Math.Max(serverWidth, results[i].Server?.Length ?? 0);
+        }
             await using StreamWriter writer = new(path, false);
             await writer.WriteLineAsync("AD Guardian - Test Results Summary");
             await writer.WriteLineAsync($"Run: {session.StartedAt:dd MMM yyyy HH:mm}");

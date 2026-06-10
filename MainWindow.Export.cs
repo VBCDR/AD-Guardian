@@ -78,8 +78,12 @@ public partial class MainWindow
         }
 
         int total = allResults.Count;
-        int passed = allResults.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-        int failed = allResults.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
+        int passed = 0, failed = 0;
+        for (int i = 0; i < total; i++)
+        {
+            if (allResults[i].Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passed++;
+            else if (allResults[i].Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failed++;
+        }
         int passRate = total > 0 ? (int)((double)passed / total * 100) : 0;
         int healthScore = CalculateHealthScore();
         string scoreColor = healthScore >= 80 ? "#2E7D32" : healthScore >= 50 ? "#F57F17" : "#C62828";
@@ -141,8 +145,12 @@ public partial class MainWindow
         }
 
         int total = results.Count;
-        int passed = results.Count(r => r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase));
-        int failed = results.Count(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase));
+        int passed = 0, failed = 0;
+        foreach (TestResult r in results)
+        {
+            if (r.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passed++;
+            else if (r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failed++;
+        }
 
         using StreamWriter htmlWriter = new(filePath, false);
         htmlWriter.WriteLine("<!DOCTYPE html><html><head><meta charset='utf-8'>");
