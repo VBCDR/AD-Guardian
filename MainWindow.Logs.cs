@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
+
 using System.Net;
 using System.Net.Http;
 using System.Net.Mail;
@@ -214,7 +214,7 @@ public partial class MainWindow
         IReadOnlyList<TestResult> sectionResults = Array.Empty<TestResult>();
         if (!string.IsNullOrWhiteSpace(logText))
         {
-            sectionResults = ParseDCDiagOutput("Log", logText, logFilePath).ToList();
+            sectionResults = ParseDCDiagOutput("Log", logText, logFilePath);
         }
 
         if (sectionResults.Count == 0 && allResults.Count > 0)

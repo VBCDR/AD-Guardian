@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
+
 using System.Net.Http;
 using System.Reflection;
 using System.Threading;
@@ -302,27 +302,32 @@ internal static class UpdateManager
             "Setup.exe"
         };
 
+        // Manual loops: avoids LINQ FirstOrDefault delegate allocations
         foreach (string preferredName in preferredNames)
         {
-            GitHubAsset? exactMatch = assets.FirstOrDefault(asset =>
-                asset.name.Equals(preferredName, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch != null)
+            for (int i = 0; i < assets.Length; i++)
             {
-                return exactMatch;
+                if (assets[i].name.Equals(preferredName, StringComparison.OrdinalIgnoreCase))
+                    return assets[i];
             }
         }
 
-        GitHubAsset? exeInstaller = assets.FirstOrDefault(asset =>
-            asset.name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-            (asset.name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
-             asset.name.Contains("setup", StringComparison.OrdinalIgnoreCase)));
-        if (exeInstaller != null)
+        for (int i = 0; i < assets.Length; i++)
         {
-            return exeInstaller;
+            GitHubAsset asset = assets[i];
+            if (asset.name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                (asset.name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
+                 asset.name.Contains("setup", StringComparison.OrdinalIgnoreCase)))
+                return asset;
         }
 
-        return assets.FirstOrDefault(asset =>
-            asset.browser_download_url.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i].browser_download_url.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                return assets[i];
+        }
+
+        return null;
     }
 
     private static bool ShouldSuppressLaunchPrompt(Version latestVersion)

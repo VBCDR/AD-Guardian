@@ -382,9 +382,8 @@ public partial class MainWindow : Window, IDisposable
             sendEmailScheduled = settings.SendEmailScheduled;
 
             cachedDashboardSnapshot = startupState.DashboardSnapshot;
-            historyEntries = startupState.History
-                .OrderByDescending(x => x.RunDate)
-                .ToList();
+            historyEntries = startupState.History;
+            historyEntries.Sort((a, b) => b.RunDate.CompareTo(a.RunDate));
             historyFullyLoaded = isScheduledLaunch || historyEntries.Count < startupHistoryLimit;
             SyncHistoryItems(historyEntries);
             ReplaceScheduledTasks(startupState.ScheduledTasks);

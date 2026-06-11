@@ -231,7 +231,7 @@ public partial class MainWindow
                     completedSteps,
                     totalSteps);
 
-                List<TestResult> dcDiagResults = ParseDCDiagOutput(dc, dcdiagResult, logFilePath).ToList();
+                List<TestResult> dcDiagResults = ParseDCDiagOutput(dc, dcdiagResult, logFilePath);
                 if (dcDiagResults.Count == 0)
                 {
                     dcDiagResults.Add(new TestResult
@@ -497,7 +497,9 @@ public partial class MainWindow
         Dictionary<string, List<TestResult>> byServer = new(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < results.Count; i++)
         {
-            string key = results[i].Server ?? dcList.FirstOrDefault() ?? "Unknown";
+            // Manual first-or-default: avoids LINQ FirstOrDefault delegate allocation
+            string? firstDc = dcList.Length > 0 ? dcList[0] : null;
+            string key = results[i].Server ?? firstDc ?? "Unknown";
             if (!byServer.TryGetValue(key, out List<TestResult>? list))
             {
                 list = new List<TestResult>();
@@ -625,7 +627,7 @@ public partial class MainWindow
         return path;
     }
 
-    internal static IEnumerable<TestResult> ParseDCDiagOutput(string server, string output, string logFilePath)
+    internal static List<TestResult> ParseDCDiagOutput(string server, string output, string logFilePath)
     {
         List<TestResult> results = new();
         string currentServer = server;
@@ -731,8 +733,16 @@ public partial class MainWindow
                 continue;
             }
 
-            if (token.Any(char.IsDigit) &&
-                token.Any(char.IsLetter) &&
+            // Manual digit/letter check: avoids LINQ Any delegate allocations
+            bool hasDigit = false, hasLetter = false;
+            for (int ci = 0; ci < token.Length; ci++)
+            {
+                char c = token[ci];
+                if (char.IsDigit(c)) hasDigit = true;
+                else if (char.IsLetter(c)) hasLetter = true;
+                if (hasDigit && hasLetter) break;
+            }
+            if (hasDigit && hasLetter &&
                 !token.Contains(".", StringComparison.OrdinalIgnoreCase) &&
                 token.Length >= 4)
             {
