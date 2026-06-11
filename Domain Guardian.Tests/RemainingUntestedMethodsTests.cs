@@ -256,11 +256,11 @@ namespace Domain_Guardian.Tests
         }
 
         [Fact]
-        public void GetActiveFindings_NullSeverity_ThrowsOnEnumeration()
+        public void GetActiveFindings_NullSeverity_TreatedAsInactive()
         {
-            // IsActiveSeverity calls .Equals on the severity string, so null will throw.
-            // GetActiveFindings returns a lazy LINQ enumerable — the throw happens
-            // during enumeration (ToList), not during the method call itself.
+            // IsActiveSeverity returns false for null (null severity is treated
+            // as inactive, equivalent to "Info"). GetActiveFindings filters
+            // eagerly, so null-severity findings are silently excluded.
             var window = CreateUninitializedMainWindow();
             var findings = new List<AdHealthFinding>
             {
@@ -271,8 +271,8 @@ namespace Domain_Guardian.Tests
             var result = InvokeInstanceMethod(window, "GetActiveFindings");
             var activeFindings = Assert.IsAssignableFrom<IEnumerable<AdHealthFinding>>(result);
 
-            // Enumeration triggers the Where predicate → IsActiveSeverity → NRE on null
-            Assert.Throws<NullReferenceException>(() => activeFindings.ToList());
+            // Null severity → not active → excluded from result
+            Assert.Empty(activeFindings);
         }
 
         // ── ApplyFindingsFilter tests (private instance method) ──────────────

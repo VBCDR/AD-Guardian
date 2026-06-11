@@ -110,6 +110,9 @@ public partial class MainWindow
     /// </summary>
     internal static bool IsActiveSeverity(string severity)
     {
+        // Treat null or empty severity as inactive (equivalent to "Info").
+        if (string.IsNullOrEmpty(severity))
+            return false;
         return !severity.Equals("Info", StringComparison.OrdinalIgnoreCase);
     }
 
