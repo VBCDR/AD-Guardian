@@ -99,6 +99,11 @@ public partial class MainWindow
 
     private async Task LoadLogsTabContentAsync()
     {
+        // Clear the pending flag immediately to prevent re-entrancy: RefreshLogSectionEntries
+        // can modify logResultItems which triggers dgLogsEntries_SelectionChanged synchronously.
+        // If logsTextPending is still true at that point, the event handler calls back into
+        // this method, creating an infinite re-entrancy loop that hangs and crashes the app.
+        logsTextPending = false;
         try
         {
             string logsText = latestLogsText;
@@ -126,7 +131,6 @@ public partial class MainWindow
                     : Path.GetFileName(latestLogsFilePath);
                 RefreshLogSectionEntries(logsText, latestLogsFilePath);
             }
-            logsTextPending = false;
         }
         catch (Exception ex)
         {
@@ -500,9 +504,17 @@ public partial class MainWindow
     {
         if (dgLogsEntries.SelectedItem is TestResult)
         {
-            if (logsTextPending)
+            if (logsTextPending && !loadingLogsTabContent)
             {
-                await LoadLogsTabContentAsync().ConfigureAwait(true);
+                loadingLogsTabContent = true;
+                try
+                {
+                    await LoadLogsTabContentAsync().ConfigureAwait(true);
+                }
+                finally
+                {
+                    loadingLogsTabContent = false;
+                }
             }
 
             JumpToSelectedLogEntry();

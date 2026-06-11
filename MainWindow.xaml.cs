@@ -127,6 +127,7 @@ public partial class MainWindow : Window, IDisposable
     private bool logsTextPending;
     private bool suppressLogsFilterEvents;
     private bool suppressLogsWorkspaceRefresh;
+    private bool loadingLogsTabContent;
     private bool schedulerTasksLoaded;
     private bool healthPageBound;
     private bool findingsPageBound;

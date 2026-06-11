@@ -108,14 +108,9 @@ public class PerformanceTests
     [InlineData("ProgressBarGradient")]
     public void AppResources_ContainsRequiredKey(string key)
     {
-        // Application.Resources must be available.
-        // In the test runner we ensure it's loaded via LazyTabCreationTests.
-        // Here we just verify the key exists.
-        if (Application.Current == null)
-        {
-            // Skip if no Application (e.g. test running in isolation).
-            return;
-        }
+        // Ensure Application singleton and App.xaml resources are loaded,
+        // regardless of test ordering or parallel execution.
+        WpfTestHelper.EnsureApplicationResources();
 
         bool exists = Application.Current.Resources.Contains(key);
         Assert.True(exists,
