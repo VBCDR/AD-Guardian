@@ -106,14 +106,14 @@
 <Button Content="Clear"
                                             Style="{StaticResource RoundedButtonStyle}"
                                             Background="#607D8B"
-                                            Width="96"
+                                            Width="106"
                                             Height="38"
                                             Margin="0,0,8,6"
                                             Click="ClearLogsFilters_Click"/>
                                     <Button Content="Open Log..."
                                             Style="{StaticResource RoundedButtonStyle}"
                                             Background="#1A73E8"
-                                            Width="110"
+                                            Width="138"
                                             Height="38"
                                             Margin="0,0,0,6"
                                             Click="OpenLogFile_Click"/>

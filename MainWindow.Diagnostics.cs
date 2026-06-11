@@ -470,11 +470,17 @@ public partial class MainWindow
 
     internal static string BuildRunSummary(int total, int passed, int failed, IEnumerable<string> controllers)
     {
-        string[] dcList = controllers
-            .Where(controller => !string.IsNullOrWhiteSpace(controller))
-            .Select(controller => controller.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        // Manual trim+distinct: avoids LINQ Where/Select/Distinct/ToArray allocations
+        List<string> dcListTemp = new();
+        HashSet<string> seenDc = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string? controller in controllers)
+        {
+            if (string.IsNullOrWhiteSpace(controller)) continue;
+            string trimmed = controller.Trim();
+            if (seenDc.Add(trimmed))
+                dcListTemp.Add(trimmed);
+        }
+        string[] dcList = dcListTemp.ToArray();
 
         return string.Join(
             Environment.NewLine,
@@ -977,14 +983,25 @@ public partial class MainWindow
     {
         try
         {
-            List<TestResult> selected = testResultsGrid.SelectedItems.OfType<TestResult>().ToList();
+            List<TestResult> selected = new();
+            foreach (object item in testResultsGrid.SelectedItems)
+            {
+                if (item is TestResult tr)
+                    selected.Add(tr);
+            }
             if (selected.Count == 0)
             {
                 new SuccessNotification("No Selection", "No results selected. Check the checkbox(es) to select result(s) to view.", isError: true).ShowDialog();
                 return;
             }
 
-            List<TestResult> validResults = selected.Where(r => !string.IsNullOrWhiteSpace(r.LogFilePath) && File.Exists(r.LogFilePath)).ToList();
+            List<TestResult> validResults = new();
+            for (int i = 0; i < selected.Count; i++)
+            {
+                TestResult r = selected[i];
+                if (!string.IsNullOrWhiteSpace(r.LogFilePath) && File.Exists(r.LogFilePath))
+                    validResults.Add(r);
+            }
             if (validResults.Count == 0)
             {
                 if (isRunInProgress || !isLogContentReady)
@@ -998,10 +1015,14 @@ public partial class MainWindow
                 return;
             }
 
-            List<string> uniqueLogFiles = validResults
-                .Select(result => result.LogFilePath)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            // Manual distinct: avoids LINQ Select/Distinct/ToList allocations
+            List<string> uniqueLogFiles = new();
+            HashSet<string> seenPaths = new(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < validResults.Count; i++)
+            {
+                if (seenPaths.Add(validResults[i].LogFilePath))
+                    uniqueLogFiles.Add(validResults[i].LogFilePath);
+            }
 
             if (uniqueLogFiles.Count > 1)
             {
@@ -1065,13 +1086,23 @@ public partial class MainWindow
             latestLogsText = combinedText;
             latestLogsFilePath = validResults[0].LogFilePath;
             RefreshLogSectionEntries(combinedText, latestLogsFilePath);
-            string fileSources = string.Join(", ", validResults
-                .Select(r => Path.GetFileName(r.LogFilePath))
-                .Distinct(StringComparer.OrdinalIgnoreCase));
-            string serviceSources = string.Join(", ", selected
-                .Where(r => !string.IsNullOrWhiteSpace(r.Service))
-                .Select(r => r.Service)
-                .Distinct());
+            HashSet<string> fileNamesSeen = new(StringComparer.OrdinalIgnoreCase);
+            List<string> fileNamesList = new();
+            for (int i = 0; i < validResults.Count; i++)
+            {
+                string fn = Path.GetFileName(validResults[i].LogFilePath);
+                if (fileNamesSeen.Add(fn)) fileNamesList.Add(fn);
+            }
+            string fileSources = string.Join(", ", fileNamesList);
+            HashSet<string> svcSeen = new(StringComparer.OrdinalIgnoreCase);
+            List<string> svcList = new();
+            for (int i = 0; i < selected.Count; i++)
+            {
+                string? svc = selected[i].Service;
+                if (!string.IsNullOrWhiteSpace(svc) && svcSeen.Add(svc))
+                    svcList.Add(svc);
+            }
+            string serviceSources = string.Join(", ", svcList);
             LogsFileNameText.Text = $"({validResults.Count} result(s)) {serviceSources} — {fileSources}";
             logsTextPending = false;
             NavigateToSection(5);

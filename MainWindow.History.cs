@@ -69,9 +69,7 @@ public partial class MainWindow
             }
 
             historyEntries.Add(entry);
-            historyEntries = historyEntries
-                .OrderByDescending(x => x.RunDate)
-                .ToList();
+            historyEntries.Sort((a, b) => b.RunDate.CompareTo(a.RunDate));
             if (!isScheduledLaunch)
             {
                 SyncHistoryItems(historyEntries);
@@ -99,9 +97,8 @@ public partial class MainWindow
         {
             List<TestHistoryEntry> loadedHistory = await Task.Run(appStateStore.LoadHistory).ConfigureAwait(true);
 
-            historyEntries = loadedHistory
-                .OrderByDescending(x => x.RunDate)
-                .ToList();
+            loadedHistory.Sort((a, b) => b.RunDate.CompareTo(a.RunDate));
+            historyEntries = loadedHistory;
             historyFullyLoaded = true;
             SyncHistoryItems(historyEntries);
             RefreshDashboard();
@@ -129,9 +126,19 @@ public partial class MainWindow
 
     internal async void ViewSelectedHistoryRun_Click(object sender, RoutedEventArgs e)
     {
-        TestHistoryEntry? entry = dgTestHistory.SelectedItems
-            .OfType<TestHistoryEntry>()
-            .FirstOrDefault() ?? dgTestHistory.SelectedItem as TestHistoryEntry;
+        // Manual search: avoids LINQ OfType/FirstOrDefault allocation
+        TestHistoryEntry? entry = dgTestHistory.SelectedItem as TestHistoryEntry;
+        if (entry == null)
+        {
+            foreach (object item in dgTestHistory.SelectedItems)
+            {
+                if (item is TestHistoryEntry te)
+                {
+                    entry = te;
+                    break;
+                }
+            }
+        }
 
         if (entry != null)
         {
@@ -153,9 +160,13 @@ public partial class MainWindow
 
     internal async void DeleteSelectedHistory_Click(object sender, RoutedEventArgs e)
     {
-        List<TestHistoryEntry> selectedEntries = dgTestHistory.SelectedItems
-            .OfType<TestHistoryEntry>()
-            .ToList();
+        // Manual cast: avoids LINQ OfType/ToList allocations
+        List<TestHistoryEntry> selectedEntries = new();
+        foreach (object item in dgTestHistory.SelectedItems)
+        {
+            if (item is TestHistoryEntry te)
+                selectedEntries.Add(te);
+        }
 
         if (selectedEntries.Count == 0 && dgTestHistory.SelectedItem is TestHistoryEntry singleEntry)
         {
@@ -165,14 +176,20 @@ public partial class MainWindow
         if (selectedEntries.Count > 0)
         {
             List<TestHistoryEntry> previousEntries = historyEntries.ToList();
-            HashSet<string> removalKeys = selectedEntries
-                .Select(BuildHistoryEntryKey)
-                .ToHashSet(StringComparer.Ordinal);
+            // Manual filter + sort: avoids LINQ Select/ToHashSet + Where/OrderByDescending/ToList allocations
+            HashSet<string> removalKeys = new(StringComparer.Ordinal);
+            for (int i = 0; i < selectedEntries.Count; i++)
+                removalKeys.Add(BuildHistoryEntryKey(selectedEntries[i]));
 
-            historyEntries = historyEntries
-                .Where(entry => !removalKeys.Contains(BuildHistoryEntryKey(entry)))
-                .OrderByDescending(entry => entry.RunDate)
-                .ToList();
+            List<TestHistoryEntry> keptEntries = new();
+            for (int i = 0; i < historyEntries.Count; i++)
+            {
+                TestHistoryEntry entry = historyEntries[i];
+                if (!removalKeys.Contains(BuildHistoryEntryKey(entry)))
+                    keptEntries.Add(entry);
+            }
+            keptEntries.Sort((a, b) => b.RunDate.CompareTo(a.RunDate));
+            historyEntries = keptEntries;
 
             SyncHistoryItems(historyEntries);
             RefreshDashboard();
@@ -209,14 +226,20 @@ public partial class MainWindow
         IReadOnlyList<TestHistoryEntry> existingEntries,
         TestHistoryEntry candidate)
     {
-        return existingEntries.Any(existing =>
-            existing.Total == candidate.Total &&
-            existing.Passed == candidate.Passed &&
-            existing.Failed == candidate.Failed &&
-            string.Equals(existing.TestType, candidate.TestType, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(existing.Details, candidate.Details, StringComparison.Ordinal) &&
-            string.Equals(existing.LogFilePath, candidate.LogFilePath, StringComparison.OrdinalIgnoreCase) &&
-            Math.Abs((existing.RunDate - candidate.RunDate).TotalMinutes) < 2);
+        // Manual duplicate check: avoids LINQ Any() allocation
+        for (int i = 0; i < existingEntries.Count; i++)
+        {
+            TestHistoryEntry existing = existingEntries[i];
+            if (existing.Total == candidate.Total &&
+                existing.Passed == candidate.Passed &&
+                existing.Failed == candidate.Failed &&
+                string.Equals(existing.TestType, candidate.TestType, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(existing.Details, candidate.Details, StringComparison.Ordinal) &&
+                string.Equals(existing.LogFilePath, candidate.LogFilePath, StringComparison.OrdinalIgnoreCase) &&
+                Math.Abs((existing.RunDate - candidate.RunDate).TotalMinutes) < 2)
+                return true;
+        }
+        return false;
     }
 
     private async Task DeleteHistoryLogsAsync(
@@ -226,54 +249,56 @@ public partial class MainWindow
     {
         try
         {
-            foreach (string deletedLogPath in deletedEntries
-                .Select(entry => entry.LogFilePath)
-                .Where(path => !string.IsNullOrWhiteSpace(path)))
+            // Manual loops: avoids LINQ Select/Where/Select/ToHashSet + Any allocations
+            foreach (TestHistoryEntry entry in deletedEntries)
             {
-                scheduledLogCache.Remove(Path.GetFullPath(deletedLogPath));
+                if (string.IsNullOrWhiteSpace(entry.LogFilePath)) continue;
+                scheduledLogCache.Remove(Path.GetFullPath(entry.LogFilePath));
             }
 
             await Task.Run(() =>
             {
-                HashSet<string> remainingLogPaths = remainingEntries
-                    .Select(entry => entry.LogFilePath)
-                    .Where(path => !string.IsNullOrWhiteSpace(path))
-                    .Select(Path.GetFullPath)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                HashSet<string> previousLogPaths = previousEntries
-                    .Select(entry => entry.LogFilePath)
-                    .Where(path => !string.IsNullOrWhiteSpace(path))
-                    .Select(Path.GetFullPath)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                foreach (TestHistoryEntry entry in deletedEntries)
+                HashSet<string> remainingLogPaths = new(StringComparer.OrdinalIgnoreCase);
+                foreach (TestHistoryEntry e in remainingEntries)
                 {
-                    if (string.IsNullOrWhiteSpace(entry.LogFilePath))
-                    {
-                        continue;
-                    }
+                    if (!string.IsNullOrWhiteSpace(e.LogFilePath))
+                        remainingLogPaths.Add(Path.GetFullPath(e.LogFilePath));
+                }
 
-                    string fullLogPath = Path.GetFullPath(entry.LogFilePath);
+                HashSet<string> previousLogPaths = new(StringComparer.OrdinalIgnoreCase);
+                foreach (TestHistoryEntry e in previousEntries)
+                {
+                    if (!string.IsNullOrWhiteSpace(e.LogFilePath))
+                        previousLogPaths.Add(Path.GetFullPath(e.LogFilePath));
+                }
+
+                foreach (TestHistoryEntry deletedEntry in deletedEntries)
+                {
+                    if (string.IsNullOrWhiteSpace(deletedEntry.LogFilePath))
+                        continue;
+
+                    string fullLogPath = Path.GetFullPath(deletedEntry.LogFilePath);
                     string? runDirectory = GetManagedRunDirectoryPath(fullLogPath);
                     if (!string.IsNullOrWhiteSpace(runDirectory))
                     {
-                        bool directoryStillReferenced = remainingLogPaths
-                            .Any(path => string.Equals(GetManagedRunDirectoryPath(path), runDirectory, StringComparison.OrdinalIgnoreCase));
+                        bool directoryStillReferenced = false;
+                        foreach (string rp in remainingLogPaths)
+                        {
+                            if (string.Equals(GetManagedRunDirectoryPath(rp), runDirectory, StringComparison.OrdinalIgnoreCase))
+                            {
+                                directoryStillReferenced = true;
+                                break;
+                            }
+                        }
 
                         if (!directoryStillReferenced && Directory.Exists(runDirectory))
-                        {
                             Directory.Delete(runDirectory, true);
-                        }
 
                         continue;
                     }
 
-                    bool logStillReferenced = remainingLogPaths.Contains(fullLogPath);
-                    if (!logStillReferenced && previousLogPaths.Contains(fullLogPath) && File.Exists(fullLogPath))
-                    {
+                    if (!remainingLogPaths.Contains(fullLogPath) && previousLogPaths.Contains(fullLogPath) && File.Exists(fullLogPath))
                         File.Delete(fullLogPath);
-                    }
                 }
             }).ConfigureAwait(true);
         }

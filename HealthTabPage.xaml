@@ -50,7 +50,7 @@
                                             Content="Export"
                                             Style="{StaticResource RoundedButtonStyle}"
                                             Background="#1A73E8"
-                                            Width="96"
+                                            Width="106"
                                             Height="40"
                                             Margin="8,0,0,0"
                                             Click="ExportButton_Click"/>
@@ -58,7 +58,7 @@
                                             Content="Summary"
                                             Style="{StaticResource RoundedButtonStyle}"
                                             Background="#1A73E8"
-                                            Width="100"
+                                            Width="110"
                                             Height="40"
                                             Margin="8,0,0,0"
                                             Click="ExecutiveSummary_Click"/>
@@ -208,7 +208,7 @@
                                                         Content="View Log"
                                                         Style="{StaticResource RoundedButtonStyle}"
                                                         Background="#1A73E8"
-                                                        Width="110"
+                                                        Width="130"
                                                         Height="36"
                                                         Padding="14,6"
                                                         Margin="0,0,6,0"

@@ -66,11 +66,15 @@ public partial class TaskSchedulerWindow : Window
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         string taskName = TaskNameTextBox.Text.Trim();
-        List<string> dcEntries = DomainControllerTextBox.Text.Trim()
-            .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(dc => dc.Trim())
-            .Where(dc => !string.IsNullOrEmpty(dc))
-            .ToList();
+        // Manual split+trim+filter: avoids LINQ Select/Where/ToList allocations
+        List<string> dcEntries = new();
+        string[] parts = DomainControllerTextBox.Text.Trim().Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            string trimmed = parts[i].Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+                dcEntries.Add(trimmed);
+        }
 
         if (dcEntries.Count == 0)
         {

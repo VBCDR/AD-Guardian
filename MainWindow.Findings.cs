@@ -113,9 +113,16 @@ public partial class MainWindow
         return !severity.Equals("Info", StringComparison.OrdinalIgnoreCase);
     }
 
-    private IEnumerable<AdHealthFinding> GetActiveFindings()
+    private List<AdHealthFinding> GetActiveFindings()
     {
-        return allFindings.Where(f => IsActiveSeverity(f.Severity));
+        // Manual filter: avoids LINQ Where allocation
+        List<AdHealthFinding> active = new();
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            if (IsActiveSeverity(allFindings[i].Severity))
+                active.Add(allFindings[i]);
+        }
+        return active;
     }
 
     internal static string InferCategory(string service)

@@ -571,8 +571,10 @@ public partial class MainWindow
 
         for (int i = 0; i < logLines.Count; i++)
         {
-            foreach (string candidate in candidates.Where(text => !string.IsNullOrWhiteSpace(text)))
+            foreach (string candidate in candidates)
             {
+                if (string.IsNullOrWhiteSpace(candidate))
+                    continue;
                 if (logLines[i].Text.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     return i;
@@ -619,11 +621,14 @@ public partial class MainWindow
         if (!filterController && !filterResult && !filterSection && !filterSearch)
         {
             currentVisibleSectionCount = logResultItems.Count;
-            currentVisibleControllerCount = logResultItems
-                .Select(result => result.Server)
-                .Where(server => !string.IsNullOrWhiteSpace(server))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Count();
+            // Manual distinct count: avoids LINQ Select/Where/Distinct/Count allocations
+            HashSet<string> distinctSrv = new(StringComparer.OrdinalIgnoreCase);
+            foreach (TestResult r in logResultItems)
+            {
+                if (!string.IsNullOrWhiteSpace(r.Server))
+                    distinctSrv.Add(r.Server);
+            }
+            currentVisibleControllerCount = distinctSrv.Count;
             return sourceText;
         }
 
@@ -650,12 +655,24 @@ public partial class MainWindow
         bool filterSearch = !string.IsNullOrWhiteSpace(searchText);
 
         List<ParsedLogSection> sections = ParseLogSections(sourceText);
-        IEnumerable<ParsedLogSection> filteredSections = sections.Where(section =>
-            (!filterController || string.Equals(section.Server, selectedController, StringComparison.OrdinalIgnoreCase)) &&
-            (!filterResult ||
-                (selectedResult.Equals("Failures", StringComparison.OrdinalIgnoreCase) && string.Equals(section.Result, "FAIL", StringComparison.OrdinalIgnoreCase)) ||
-                (selectedResult.Equals("Passes", StringComparison.OrdinalIgnoreCase) && string.Equals(section.Result, "PASS", StringComparison.OrdinalIgnoreCase))) &&
-            (!filterSection || string.Equals(section.Service, selectedSection, StringComparison.OrdinalIgnoreCase)));
+        // Manual filter: avoids LINQ Where + Where/ToList allocations
+        List<ParsedLogSection> filteredSections = new();
+        for (int i = 0; i < sections.Count; i++)
+        {
+            ParsedLogSection section = sections[i];
+            if (filterController && !string.Equals(section.Server, selectedController, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (filterResult)
+            {
+                if (selectedResult.Equals("Failures", StringComparison.OrdinalIgnoreCase) && !string.Equals(section.Result, "FAIL", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (selectedResult.Equals("Passes", StringComparison.OrdinalIgnoreCase) && !string.Equals(section.Result, "PASS", StringComparison.OrdinalIgnoreCase))
+                    continue;
+            }
+            if (filterSection && !string.Equals(section.Service, selectedSection, StringComparison.OrdinalIgnoreCase))
+                continue;
+            filteredSections.Add(section);
+        }
 
         StringBuilder builder = new();
         HashSet<string> visibleControllers = new(StringComparer.OrdinalIgnoreCase);
@@ -663,9 +680,20 @@ public partial class MainWindow
 
         foreach (ParsedLogSection section in filteredSections)
         {
-            IReadOnlyList<string> visibleLines = filterSearch
-                ? section.Lines.Where(line => line.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0).ToList()
-                : section.Lines;
+            List<string> visibleLines = new();
+            if (filterSearch)
+            {
+                for (int li = 0; li < section.Lines.Count; li++)
+                {
+                    string line = section.Lines[li];
+                    if (line.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                        visibleLines.Add(line);
+                }
+            }
+            else
+            {
+                visibleLines.AddRange(section.Lines);
+            }
 
             if (visibleLines.Count == 0)
             {

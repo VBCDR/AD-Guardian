@@ -88,8 +88,20 @@ public partial class MainWindow
         int healthScore = CalculateHealthScore();
         string scoreColor = healthScore >= 80 ? "#2E7D32" : healthScore >= 50 ? "#F57F17" : "#C62828";
 
-        var failures = allResults.Where(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)).ToList();
-        var findings = allFindings.Where(f => f.Severity == "Critical" || f.Severity == "High").ToList();
+        // Manual filter: avoids LINQ Where/ToList allocations
+        List<TestResult> failures = new();
+        for (int i = 0; i < allResults.Count; i++)
+        {
+            if (allResults[i].Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase))
+                failures.Add(allResults[i]);
+        }
+        List<AdHealthFinding> findings = new();
+        for (int i = 0; i < allFindings.Count; i++)
+        {
+            string sev = allFindings[i].Severity;
+            if (sev == "Critical" || sev == "High")
+                findings.Add(allFindings[i]);
+        }
 
         SaveFileDialog sfd = new()
         {
@@ -187,12 +199,20 @@ public partial class MainWindow
         IReadOnlyCollection<TestResult> allResultSnapshot,
         IReadOnlyCollection<AdHealthFinding> allFindingSnapshot)
     {
-        List<TestResult> failures = allResultSnapshot
-            .Where(r => r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        List<AdHealthFinding> findings = allFindingSnapshot
-            .Where(f => f.Severity == "Critical" || f.Severity == "High")
-            .ToList();
+        // Manual filter: avoids LINQ Where/ToList allocations
+        List<TestResult> failures = new();
+        foreach (TestResult r in allResultSnapshot)
+        {
+            if (r.Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase))
+                failures.Add(r);
+        }
+        List<AdHealthFinding> findings = new();
+        foreach (AdHealthFinding f in allFindingSnapshot)
+        {
+            string sev = f.Severity;
+            if (sev == "Critical" || sev == "High")
+                findings.Add(f);
+        }
 
         using StreamWriter w = new(filePath, false);
         w.WriteLine("<!DOCTYPE html><html><head><meta charset='utf-8'>");

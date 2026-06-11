@@ -911,16 +911,21 @@ public partial class MainWindow : Window, IDisposable
 
             await Task.Run(() =>
             {
-                HashSet<string> protectedFiles = historyEntries
-                    .Select(entry => entry.LogFilePath)
-                    .Where(path => !string.IsNullOrWhiteSpace(path))
-                    .Select(Path.GetFullPath)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                HashSet<string> protectedRunDirectories = protectedFiles
-                    .Select(GetManagedRunDirectoryPath)
-                    .Where(path => !string.IsNullOrWhiteSpace(path))
-                    .Select(path => Path.GetFullPath(path!))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                // Manual loops: avoids LINQ Select/Where/Select/ToHashSet allocations (2x 3-chain pipelines)
+                HashSet<string> protectedFiles = new(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < historyEntries.Count; i++)
+                {
+                    string? path = historyEntries[i].LogFilePath;
+                    if (!string.IsNullOrWhiteSpace(path))
+                        protectedFiles.Add(Path.GetFullPath(path));
+                }
+                HashSet<string> protectedRunDirectories = new(StringComparer.OrdinalIgnoreCase);
+                foreach (string filePath in protectedFiles)
+                {
+                    string? dir = GetManagedRunDirectoryPath(filePath);
+                    if (!string.IsNullOrWhiteSpace(dir))
+                        protectedRunDirectories.Add(Path.GetFullPath(dir));
+                }
 
                 if (!string.IsNullOrWhiteSpace(latestLogsFilePath))
                 {
@@ -942,7 +947,7 @@ public partial class MainWindow : Window, IDisposable
                         runDirectories.AddRange(dateDir.GetDirectories("*", SearchOption.TopDirectoryOnly));
                     }
 
-                    runDirectories = runDirectories.OrderByDescending(d => d.LastWriteTimeUtc).ToList();
+                    runDirectories.Sort((a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
 
                     foreach (DirectoryInfo runDirectory in runDirectories)
                     {
@@ -964,11 +969,12 @@ public partial class MainWindow : Window, IDisposable
                         allRunDirs.AddRange(dateDir.GetDirectories("*", SearchOption.TopDirectoryOnly));
                     }
 
-                    foreach (DirectoryInfo extraDirectory in allRunDirs
-                        .OrderByDescending(d => d.LastWriteTimeUtc)
-                        .Skip(100)
-                        .Where(d => !protectedRunDirectories.Contains(d.FullName)))
+                    allRunDirs.Sort((a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
+                    for (int ai = 100; ai < allRunDirs.Count; ai++)
                     {
+                        DirectoryInfo extraDirectory = allRunDirs[ai];
+                        if (protectedRunDirectories.Contains(extraDirectory.FullName))
+                            continue;
                         extraDirectory.Delete(true);
                     }
 
@@ -982,9 +988,8 @@ public partial class MainWindow : Window, IDisposable
                 }
 
                 FileInfo[] legacyFlatFiles = new DirectoryInfo(LogDirectoryPath)
-                    .GetFiles("*.txt", SearchOption.TopDirectoryOnly)
-                    .OrderByDescending(file => file.LastWriteTimeUtc)
-                    .ToArray();
+                    .GetFiles("*.txt", SearchOption.TopDirectoryOnly);
+                Array.Sort(legacyFlatFiles, (a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
 
                 foreach (FileInfo file in legacyFlatFiles)
                 {
@@ -1000,12 +1005,14 @@ public partial class MainWindow : Window, IDisposable
                     }
                 }
 
-                foreach (FileInfo extraFile in new DirectoryInfo(LogDirectoryPath)
-                    .GetFiles("*.txt", SearchOption.TopDirectoryOnly)
-                    .OrderByDescending(file => file.LastWriteTimeUtc)
-                    .Skip(25)
-                    .Where(file => !protectedFiles.Contains(file.FullName)))
+                FileInfo[] allLogFiles = new DirectoryInfo(LogDirectoryPath)
+                    .GetFiles("*.txt", SearchOption.TopDirectoryOnly);
+                Array.Sort(allLogFiles, (a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
+                for (int fi = 25; fi < allLogFiles.Length; fi++)
                 {
+                    FileInfo extraFile = allLogFiles[fi];
+                    if (protectedFiles.Contains(extraFile.FullName))
+                        continue;
                     extraFile.Delete();
                 }
             }).ConfigureAwait(true);
