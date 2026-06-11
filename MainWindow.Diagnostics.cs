@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
+
 using System.Net;
 using System.Net.Http;
 using System.Net.Mail;
@@ -66,10 +66,22 @@ public partial class MainWindow
         return _sanitizeCache.GetOrAdd(value, static k =>
         {
             char[] invalidChars = Path.GetInvalidFileNameChars();
-            char[] sanitized = k
-                .Trim()
-                .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
-                .ToArray();
+            string trimmed = k.Trim();
+            char[] sanitized = new char[trimmed.Length];
+            for (int i = 0; i < trimmed.Length; i++)
+            {
+                char ch = trimmed[i];
+                bool isInvalid = false;
+                for (int ci = 0; ci < invalidChars.Length; ci++)
+                {
+                    if (invalidChars[ci] == ch)
+                    {
+                        isInvalid = true;
+                        break;
+                    }
+                }
+                sanitized[i] = isInvalid ? '_' : ch;
+            }
 
             string collapsed = string.Join("_", new string(sanitized)
                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));

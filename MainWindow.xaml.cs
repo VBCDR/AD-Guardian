@@ -626,13 +626,7 @@ public partial class MainWindow : Window, IDisposable
     private void SyncResultItems()
     {
         ReplaceCollection(resultItems, allResults);
-        using (resultItemsView?.DeferRefresh())
-        {
-        }
         ReplaceCollection(logResultItems, allResults);
-        using (logResultItemsView?.DeferRefresh())
-        {
-        }
         if (MainTabControl.SelectedIndex == 5)
         {
             RefreshLogsWorkspace();
@@ -666,12 +660,6 @@ public partial class MainWindow : Window, IDisposable
     private void SyncHistoryItems(IEnumerable<TestHistoryEntry> items)
     {
         ReplaceCollection(historyItems, items);
-        if (historyPageBound)
-        {
-            using (EnsureHistoryItemsView().DeferRefresh())
-            {
-            }
-        }
     }
 
     private void ScheduleLaunchUpdateCheck()
@@ -690,12 +678,11 @@ public partial class MainWindow : Window, IDisposable
     private void SyncFindingItems()
     {
         ReplaceCollection(findingItems, allFindings);
-        if (findingsPageBound)
-        {
-            using (EnsureFindingItemsView().DeferRefresh())
-            {
-            }
-        }
+        // Always refresh the view if it exists, even if the findings tab hasn't been
+        // visited yet. This ensures the DataGrid shows current data when the user
+        // navigates to the findings tab after data was loaded (e.g., viewing a
+        // scheduled run from history).
+        findingItemsView?.Refresh();
     }
 
     private void ReplaceScheduledTasks(IEnumerable<ScheduledTask> items)

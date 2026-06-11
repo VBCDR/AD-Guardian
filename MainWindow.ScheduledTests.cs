@@ -218,7 +218,7 @@ public partial class MainWindow
         {
             output = await File.ReadAllTextAsync(logFilePath).ConfigureAwait(true);
             parsedResults = await Task.Run(
-                () => ParseDCDiagOutput("Scheduled", output, logFilePath).ToList()).ConfigureAwait(true);
+                () => ParseDCDiagOutput("Scheduled", output, logFilePath)).ConfigureAwait(true);
             if (scheduledLogCache.Count >= 20)
             {
                 RemoveOldestScheduledLogCacheEntry();
@@ -235,6 +235,19 @@ public partial class MainWindow
         allResults.AddRange(parsedResults);
         RebuildFindings();
         SyncResultItems();
+
+        // Defer CollectionView refreshes until after the loading window closes and
+        // IsEnabled is restored. Calling Refresh() while the window is disabled can
+        // cause WPF to suppress the binding updates that repopulate the DataGrids.
+        Dispatcher.BeginInvoke(() =>
+        {
+            resultItemsView?.Refresh();
+            if (_FindingsTab != null)
+            {
+                findingItemsView?.Refresh();
+            }
+        }, DispatcherPriority.Loaded);
+
         latestLogsFilePath = logFilePath;
         latestLogsText = output;
         isLogContentReady = true;
