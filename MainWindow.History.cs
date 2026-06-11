@@ -195,6 +195,29 @@ public partial class MainWindow
             RefreshDashboard();
             await PersistHistoryAsync().ConfigureAwait(true);
             await DeleteHistoryLogsAsync(selectedEntries, historyEntries, previousEntries).ConfigureAwait(true);
+
+            // If the currently displayed log file was deleted, clear the stale reference
+            // so the logs tab doesn't show a non-existent file path.
+            if (!string.IsNullOrWhiteSpace(latestLogsFilePath))
+            {
+                string fullLatest = Path.GetFullPath(latestLogsFilePath);
+                bool latestStillReferenced = false;
+                for (int i = 0; i < historyEntries.Count; i++)
+                {
+                    string? entryPath = historyEntries[i].LogFilePath;
+                    if (!string.IsNullOrWhiteSpace(entryPath) &&
+                        string.Equals(Path.GetFullPath(entryPath), fullLatest, StringComparison.OrdinalIgnoreCase))
+                    {
+                        latestStillReferenced = true;
+                        break;
+                    }
+                }
+                if (!latestStillReferenced && !File.Exists(fullLatest))
+                {
+                    latestLogsFilePath = string.Empty;
+                    latestLogsText = string.Empty;
+                }
+            }
         }
         else
         {
@@ -302,8 +325,9 @@ public partial class MainWindow
                 }
             }).ConfigureAwait(true);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"Error deleting history log files: {ex}");
         }
     }
 
