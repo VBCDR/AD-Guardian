@@ -204,6 +204,40 @@ public class AboutWindowVersionTests
 
         Assert.Equal(assemblyVersion.Major, informationalVersion.Major);
         Assert.Equal(assemblyVersion.Minor, informationalVersion.Minor);
+        // Build must also match: a drift here caused the v2.0.16 -> v2.0.17
+        // "Update Available" prompt to fire on every launch because
+        // UpdateManager.GetCurrentAppVersion() prefers InformationalVersion.
+        Assert.Equal(assemblyVersion.Build, informationalVersion.Build);
+    }
+
+    [Fact]
+    public void Assembly_AllVersionAttributes_AreConsistent()
+    {
+        // Regression guard: AssemblyVersion, AssemblyFileVersion and
+        // AssemblyInformationalVersion must all agree on Major.Minor.Build.
+        // A previous release shipped with InformationalVersion="2.0.16" while
+        // AssemblyVersion="2.0.17.0", which made the update prompt fire
+        // on every launch even after the user updated.
+        Assembly assembly = typeof(AboutWindow).Assembly;
+
+        Version assemblyVersion = assembly.GetName().Version;
+        Assert.NotNull(assemblyVersion);
+
+        var fileVersionAttr = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>();
+        Assert.NotNull(fileVersionAttr);
+        Version fileVersion = Version.Parse(fileVersionAttr.Version);
+
+        var informationalAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+        Assert.NotNull(informationalAttr);
+        bool parsed = AboutWindow.TryParseReleaseVersion(
+            informationalAttr.InformationalVersion, out Version informationalVersion);
+        Assert.True(parsed,
+            $"AssemblyInformationalVersion '{informationalAttr.InformationalVersion}' must be a parseable version");
+
+        Version expectedBuild = new(assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build);
+        Version expectedFile = new(fileVersion.Major, fileVersion.Minor, fileVersion.Build);
+        Assert.Equal(expectedBuild, expectedFile);
+        Assert.Equal(expectedBuild, informationalVersion);
     }
 
     // ── Window_Loaded display logic ──────────────────────────────────────

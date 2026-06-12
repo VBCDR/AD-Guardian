@@ -31,9 +31,13 @@
                 </StackPanel>
             </StackPanel>
 
-            <TextBlock Grid.Row="1" x:Name="MessageText"
-                       TextWrapping="Wrap" FontSize="14" Foreground="#4A5B6C"
-                       Margin="0,0,0,18"/>
+            <StackPanel Grid.Row="1" Margin="0,0,0,18">
+                <TextBlock x:Name="MessageText"
+                           TextWrapping="Wrap" FontSize="14" Foreground="#4A5B6C"
+                           Margin="0,0,0,8"/>
+                <TextBlock x:Name="InstalledVersionText"
+                           TextWrapping="Wrap" FontSize="12" Foreground="#7A8B9F"/>
+            </StackPanel>
 
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="UpdateButton"

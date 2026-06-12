@@ -4,7 +4,7 @@ using System.Windows;
 
 [assembly: AssemblyVersion("2.0.17.0")]
 [assembly: AssemblyFileVersion("2.0.17.0")]
-[assembly: AssemblyInformationalVersion("2.0.16")]
+[assembly: AssemblyInformationalVersion("2.0.17")]
 
 [assembly: InternalsVisibleTo("Domain Guardian.Tests")]
 
