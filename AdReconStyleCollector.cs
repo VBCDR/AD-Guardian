@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
@@ -169,7 +170,10 @@ if (Get-Command Get-GPO -ErrorAction SilentlyContinue) {
         process.StartInfo = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script.Replace("\"", "\\\"")}\"",
+            // Use -EncodedCommand (Base64-encoded UTF-16LE) so the script text never appears
+            // on the command line. This avoids escaping headaches and closes the door on
+            // shell metacharacter injection from PowerShell syntax inside the script.
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {Convert.ToBase64String(Encoding.Unicode.GetBytes(script))}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

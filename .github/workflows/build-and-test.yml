@@ -1,0 +1,77 @@
+name: build-and-test
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Cancel in-flight runs for the same PR/ref on new pushes; keep push-to-master
+# runs serial so the badge history stays linear.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build (Release)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          cache: true
+          # No packages.lock.json in this repo yet, so explicitly point the
+          # cache key at the .csproj files. When packages change, the
+          # cache key changes and the packages are re-fetched.
+          cache-dependency-path: 'AD-Guardian/**/*.csproj'
+      - name: Restore
+        run: dotnet restore "AD Guardian.sln"
+      - name: Build (Release)
+        run: dotnet build "AD Guardian.sln" -c Release --no-restore
+
+  # The "required" check. Mark this job as a required status check in branch
+  # protection rules to make LinqOptimizationBenchmarks + PerformanceTests
+  # a hard gate for merges to master.
+  required-tests:
+    name: Required perf tests (LinqOptimizationBenchmarks + PerformanceTests)
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          cache: true
+          cache-dependency-path: 'AD-Guardian/**/*.csproj'
+      - name: Run required tests
+        run: >
+          dotnet test "AD Guardian.sln"
+          -c Release
+          --filter "Category=RequiredForCI"
+          --logger "console;verbosity=normal"
+
+  # Everything else. Excludes the RequiredForCI category so the required
+  # tests only run once (in the required-tests job). Non-required failures
+  # are surfaced but do not block the build.
+  all-tests:
+    name: All other tests (informational)
+    runs-on: windows-latest
+    needs: build
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+          cache: true
+          cache-dependency-path: 'AD-Guardian/**/*.csproj'
+      - name: Run all other tests (excluding required)
+        run: >
+          dotnet test "AD Guardian.sln"
+          -c Release
+          --filter "Category!=RequiredForCI"
+          --logger "console;verbosity=normal"

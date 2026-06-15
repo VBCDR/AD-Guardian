@@ -167,15 +167,6 @@ public partial class MainWindow
             return;
         }
 
-        if (domainControllers.IndexOf("lottery", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            string lotteryMessage = $"Good find congrats!\n\nYour Lucky numbers are:\n {GenerateLotteryNumbers()}\n\nGood Luck! 🤞";
-            ShowLotteryPopup(lotteryMessage);
-            SendEmailWithAttachment("Lottery Notification", lotteryMessage, string.Empty);
-            SetRunInProgress(false);
-            return;
-        }
-
         cancellationTokenSource?.Dispose();
         cancellationTokenSource = new CancellationTokenSource();
         CancellationToken token = cancellationTokenSource.Token;
@@ -852,10 +843,13 @@ public partial class MainWindow
         try
         {
             using Process process = new();
+            // Use -EncodedCommand (Base64-encoded UTF-16LE) so the script text never appears
+            // on the command line. This avoids escaping headaches and closes the door on
+            // shell metacharacter injection from PowerShell syntax inside the script.
             process.StartInfo = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script.Replace("\"", "\\\"")}\"",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {Convert.ToBase64String(Encoding.Unicode.GetBytes(script))}",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -870,7 +864,7 @@ public partial class MainWindow
                 await process.WaitForExitAsync(token).ConfigureAwait(false);
                 string output = await outputTask.ConfigureAwait(false);
                 string error = await errorTask.ConfigureAwait(false);
-                await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell] {script}\n{output}\n{error}\n", token).ConfigureAwait(false);
+                await AppendToLogWithRetryAsync(logFilePath, $"[PowerShell -EncodedCommand]\n{output}\n{error}\n", token).ConfigureAwait(false);
                 return string.IsNullOrWhiteSpace(output) ? error : output.Trim();
             }
             catch (OperationCanceledException)

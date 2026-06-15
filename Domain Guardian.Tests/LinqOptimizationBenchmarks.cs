@@ -12,6 +12,7 @@ namespace Domain_Guardian.Tests;
 /// GC assertions are only used where the optimized code path is
 /// genuinely allocation-free (stack-only operations).
 /// </summary>
+[Trait("Category", "RequiredForCI")]
 public class LinqOptimizationBenchmarks
 {
     private const int BenchmarkIterations = 5_000;

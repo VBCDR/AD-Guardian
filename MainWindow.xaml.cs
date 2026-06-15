@@ -17,7 +17,6 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Documents;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -48,6 +47,9 @@ public partial class MainWindow : Window, IDisposable
     {
         public string name { get; set; } = string.Empty;
         public string browser_download_url { get; set; } = string.Empty;
+        // Mirrors UpdateManager.GitHubAsset — kept here so the WPF UI's independent
+        // deserialisation stays in sync with the verified update path.
+        public string digest { get; set; } = string.Empty;
     }
 
     private sealed class CachedScheduledLog
@@ -1082,40 +1084,6 @@ public partial class MainWindow : Window, IDisposable
     {
         Dispose();
         base.OnClosing(e);
-    }
-
-    private string GenerateLotteryNumbers()
-    {
-        Random rnd = new();
-        return string.Join(", ", Enumerable.Range(1, 59).OrderBy(_ => rnd.Next()).Take(6).OrderBy(n => n));
-    }
-
-    private void ShowLotteryPopup(string message)
-    {
-        FlowDocument document = new();
-        document.Blocks.Add(new Paragraph(new Run(message))
-        {
-            FontFamily = new FontFamily("Segoe UI"),
-            FontSize = 16,
-            Foreground = Brushes.DarkBlue,
-            TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(20)
-        });
-
-        Window popup = new()
-        {
-            Title = "Lottery Numbers",
-            Height = 300,
-            Width = 500,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            Content = new RichTextBox
-            {
-                Document = document,
-                IsReadOnly = true,
-                Margin = new Thickness(10)
-            }
-        };
-        popup.ShowDialog();
     }
 
     private void AboutButton_Click(object sender, RoutedEventArgs e)

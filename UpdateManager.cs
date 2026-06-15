@@ -4,6 +4,7 @@ using System.IO;
 
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -31,6 +32,9 @@ internal static class UpdateManager
     {
         public string name { get; set; } = string.Empty;
         public string browser_download_url { get; set; } = string.Empty;
+        // GitHub returns "sha256:<hex>". Empty means "no digest" — the verification step
+        // refuses to launch the installer in that case (fail-closed).
+        public string digest { get; set; } = string.Empty;
     }
 
     private sealed class UpdateState
@@ -173,6 +177,20 @@ internal static class UpdateManager
             }
 
             progressWindow.SetStage(
+                "Verifying installer",
+                "Computing SHA-256 of the downloaded installer and comparing it to the GitHub release digest.",
+                isIndeterminate: true);
+            try
+            {
+                await VerifyInstallerHashAsync(installerPath, asset).ConfigureAwait(true);
+            }
+            catch
+            {
+                progressWindow.Close();
+                throw;
+            }
+
+            progressWindow.SetStage(
                 "Starting installer",
                 "The installer is being launched. You will see installation progress in the setup window.",
                 isIndeterminate: true);
@@ -245,6 +263,58 @@ internal static class UpdateManager
         }
 
         return tempFile;
+    }
+
+    // SHA-256 of the downloaded file in lower-case hex (64 chars).
+    private static async Task<string> ComputeFileSha256HexAsync(string filePath)
+    {
+        await using FileStream fs = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+        using IncrementalHash sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        byte[] buffer = new byte[81920];
+        int bytesRead;
+        while ((bytesRead = await fs.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false)) > 0)
+        {
+            sha.AppendData(buffer, 0, bytesRead);
+        }
+        return Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    // Verifies the downloaded installer against the digest returned by the GitHub Releases API.
+    // Fail-closed: if the API returned no digest (or a non-SHA-256 algorithm), the installer is
+    // not launched. This protects against tampered releases, MITM on the download URL, and
+    // truncated/corrupt downloads.
+    private static async Task VerifyInstallerHashAsync(string installerPath, GitHubAsset asset)
+    {
+        const string Sha256Prefix = "sha256:";
+
+        if (string.IsNullOrWhiteSpace(asset.digest))
+        {
+            throw new InvalidOperationException(
+                $"Release asset '{asset.name}' has no digest from GitHub; refusing to launch an unverified installer.");
+        }
+
+        if (!asset.digest.StartsWith(Sha256Prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Release asset '{asset.name}' has unsupported digest '{asset.digest}'; expected 'sha256:<hex>'.");
+        }
+
+        string expected = asset.digest[Sha256Prefix.Length..].Trim().ToLowerInvariant();
+        if (expected.Length != 64)
+        {
+            throw new InvalidOperationException(
+                $"Release asset '{asset.name}' has malformed SHA-256 digest (expected 64 hex chars, got {expected.Length}).");
+        }
+
+        string actual = await ComputeFileSha256HexAsync(installerPath).ConfigureAwait(false);
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            // Best-effort cleanup of the bad file so it doesn't linger in the temp directory.
+            try { File.Delete(installerPath); } catch { /* ignore */ }
+            throw new InvalidOperationException(
+                $"SHA-256 verification FAILED for '{asset.name}'. " +
+                $"Expected '{expected}', computed '{actual}'. The downloaded file is corrupt or has been tampered with; the installer will not be launched.");
+        }
     }
 
     private static void LaunchInstallerForUpdate(string installerPath)

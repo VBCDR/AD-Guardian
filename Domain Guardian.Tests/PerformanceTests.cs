@@ -15,6 +15,7 @@ namespace Domain_Guardian.Tests;
 /// - Dashboard snapshot hash-based skip mechanism
 /// - Log line caching
 /// </summary>
+[Trait("Category", "RequiredForCI")]
 public class PerformanceTests
 {
     // ── Frozen brush verification ────────────────────────────────────────
