@@ -50,9 +50,17 @@ if (-not $Title) {
 }
 
 $repo = "VBCDR/AD-Guardian"
-$releaseView = & $gh release view $Tag --repo $repo 2>$null
+$releaseExists = $false
+try {
+    $null = & $gh release view $Tag --repo $repo --json tagName 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $releaseExists = $true
+    }
+} catch {
+    $releaseExists = $false
+}
 
-if ($LASTEXITCODE -ne 0) {
+if (-not $releaseExists) {
     $createArgs = @("release", "create", $Tag, $uploadAssetPath, "--repo", $repo, "--title", $Title)
     if ($Notes) {
         $createArgs += @("--notes", $Notes)
