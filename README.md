@@ -86,3 +86,11 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 
    ```bash
    git clone https://github.com/VBCDR/AD-Guardian.git
+
+
+## Continuous Integration
+
+Builds and tests run on every push to `master` and every pull request via
+GitHub Actions (`.github/workflows/build-and-test.yml`). The
+`Required perf tests (LinqOptimizationBenchmarks + PerformanceTests)` job
+is the required status check on `master`.
