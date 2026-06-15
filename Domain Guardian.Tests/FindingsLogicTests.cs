@@ -317,7 +317,7 @@ public class FindingsLogicTests
 
         foreach (TestResult result in results)
         {
-            if (result.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase))
+            if (MainWindow.IsNonActionableResult(result.Result))
                 continue;
 
             allFindings.Add(new AdHealthFinding
@@ -540,6 +540,26 @@ public class FindingsLogicTests
 
         var findings = SimulateRebuildFindings(results);
         Assert.Empty(findings);
+    }
+
+    [Fact]
+    public void RebuildFindings_InfoResult_ProducesEmpty()
+    {
+        var results = new List<TestResult>
+        {
+            new()
+            {
+                Service = "DCDiag",
+                Server = "DC01",
+                Result = "INFO",
+                Message = "DCDiag output was captured, but AD Guardian could not parse individual test sections."
+            }
+        };
+
+        var findings = SimulateRebuildFindings(results);
+
+        Assert.Empty(findings);
+        Assert.True(MainWindow.IsNonActionableResult("INFO"));
     }
 
     // ── Full severity + category pipeline tests ──────────────────────────

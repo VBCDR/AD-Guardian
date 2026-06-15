@@ -74,14 +74,7 @@ public partial class MainWindow
                 List<TestResult> dcDiagResults = ParseDCDiagOutput(dc, dcdiagResult, logFilePath).ToList();
                 if (dcDiagResults.Count == 0)
                 {
-                    dcDiagResults.Add(new TestResult
-                    {
-                        Service = "DCDiag",
-                        Server = dc,
-                        Result = "FAIL",
-                        Message = "DCDiag produced no parseable output. DC may be unreachable.",
-                        LogFilePath = logFilePath
-                    });
+                    dcDiagResults.Add(CreateUnparseableDcdiagResult(dc, dcdiagResult, logFilePath));
                 }
                 allResults.AddRange(dcDiagResults);
                 logFilePaths.Add(logFilePath);
@@ -186,7 +179,12 @@ public partial class MainWindow
         }
         finally
         {
-            Application.Current.Dispatcher.Invoke(Application.Current.Shutdown);
+            // Only shutdown after a brief delay to allow any pending UI cleanup
+            // Do not shutdown immediately if a modal dialog is showing (scheduled mode hides main window)
+            if (isScheduledLaunch)
+            {
+                _ = Task.Delay(500).ContinueWith(_ => Application.Current.Dispatcher.Invoke(Application.Current.Shutdown));
+            }
         }
     }
 
@@ -249,7 +247,7 @@ public partial class MainWindow
         // Defer CollectionView refreshes until after the loading window closes and
         // IsEnabled is restored. Calling Refresh() while the window is disabled can
         // cause WPF to suppress the binding updates that repopulate the DataGrids.
-        Dispatcher.BeginInvoke(() =>
+        _ = Dispatcher.BeginInvoke(() =>
         {
             resultItemsView?.Refresh();
             if (_FindingsTab != null)

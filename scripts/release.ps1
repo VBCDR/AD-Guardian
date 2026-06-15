@@ -4,7 +4,12 @@ param(
     [string]$Configuration = "Release",
     [switch]$SkipTests,
     [switch]$SkipPublish,
-    [switch]$AutoPush
+    [switch]$AutoPush,
+    [ValidateSet("1", "2", "3")]
+    [string]$VersionChoice,
+    [ValidateSet("1", "2")]
+    [string]$ReleaseChoice,
+    [string]$ReleaseTitle
 )
 
 $ErrorActionPreference = "Stop"
@@ -105,7 +110,12 @@ Write-Host "    [2] Bump patch version ($(Get-NextPatchVersion $currentVersion))
 Write-Host "    [3] Enter custom version" -ForegroundColor White
 Write-Host ""
 
-$versionChoice = Read-Host "  Choose (1/2/3)"
+if (-not $VersionChoice) {
+    $versionChoice = Read-Host "  Choose (1/2/3)"
+} else {
+    $versionChoice = $VersionChoice
+    Write-Status "Using preset version choice: $versionChoice" "Yellow"
+}
 
 $newVersion = $currentVersion
 $versionChanged = $false
@@ -282,12 +292,24 @@ if ($installerExePath -and (Test-Path $installerExePath)) {
     Write-Host "    [2] Skip GitHub release" -ForegroundColor White
     Write-Host ""
 
-    $releaseChoice = Read-Host "  Choose (1/2)"
+    if (-not $ReleaseChoice) {
+        $releaseChoice = Read-Host "  Choose (1/2)"
+    } else {
+        $releaseChoice = $ReleaseChoice
+        Write-Status "Using preset release choice: $releaseChoice" "Yellow"
+    }
 
     if ($releaseChoice -eq "1") {
-        $releaseTitle = Read-Host "  Release title (Enter for '$releaseTag')"
-        if ([string]::IsNullOrWhiteSpace($releaseTitle)) {
+        if (-not $ReleaseTitle) {
+            $releaseTitle = Read-Host "  Release title (Enter for '$releaseTag')"
+            if ([string]::IsNullOrWhiteSpace($releaseTitle)) {
+                $releaseTitle = $releaseTag
+            }
+        } elseif ([string]::IsNullOrWhiteSpace($ReleaseTitle)) {
             $releaseTitle = $releaseTag
+        } else {
+            $releaseTitle = $ReleaseTitle
+            Write-Status "Using preset release title: $releaseTitle" "Yellow"
         }
 
         Write-Status "Publishing GitHub release..."

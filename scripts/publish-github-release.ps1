@@ -32,8 +32,6 @@ if (-not $resolvedInstaller) {
 
 Copy-Item -LiteralPath $resolvedInstaller -Destination $uploadAssetPath -Force
 
-Copy-Item -LiteralPath $installerPath -Destination $uploadAssetPath -Force
-
 $ghCandidates = @(
     "gh",
     "$Env:ProgramFiles\GitHub CLI\gh.exe",

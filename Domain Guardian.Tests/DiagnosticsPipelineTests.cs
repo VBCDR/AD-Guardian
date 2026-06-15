@@ -212,6 +212,31 @@ Doing initial required tests
         Assert.Empty(results);
     }
 
+    [Fact]
+    public void CreateUnparseableDcdiagResult_WithCapturedNonErrorOutput_ReturnsInfo()
+    {
+        string output = "Directory Server Diagnosis\nNo parseable section headers were emitted.";
+
+        TestResult result = MainWindow.CreateUnparseableDcdiagResult("DC01", output, "test.log");
+
+        Assert.Equal("DCDiag", result.Service);
+        Assert.Equal("DC01", result.Server);
+        Assert.Equal("INFO", result.Result);
+        Assert.Contains("could not parse", result.Message);
+        Assert.Equal("test.log", result.LogFilePath);
+    }
+
+    [Fact]
+    public void CreateUnparseableDcdiagResult_WithExecutionError_ReturnsFail()
+    {
+        string output = "ERROR: Command timed out after 5 minutes";
+
+        TestResult result = MainWindow.CreateUnparseableDcdiagResult("DC01", output, "test.log");
+
+        Assert.Equal("FAIL", result.Result);
+        Assert.Contains("execution or connectivity", result.Message);
+    }
+
     // ── BuildRunSummary tests ────────────────────────────────────────────
 
     [Fact]

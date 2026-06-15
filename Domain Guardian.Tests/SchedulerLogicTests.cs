@@ -80,29 +80,22 @@ public class SchedulerLogicTests : IDisposable
     [Fact]
     public void UnreachableDc_FallbackProducesDcDiagFailEntry()
     {
-        // When ParseDCDiagOutput returns no results (unreachable DC),
-        // the caller should add a fallback FAIL entry.
-        string emptyOutput = "Some error output without test results";
+        // When ParseDCDiagOutput returns no results and output indicates
+        // an execution problem, the caller should add a fallback FAIL entry.
+        string emptyOutput = "ERROR: Some error output without test results";
         var results = MainWindow.ParseDCDiagOutput("DC01", emptyOutput, "test.log").ToList();
 
         // Simulate the fallback logic from RunScheduledTestsAsync
         if (results.Count == 0)
         {
-            results.Add(new TestResult
-            {
-                Service = "DCDiag",
-                Server = "DC01",
-                Result = "FAIL",
-                Message = "DCDiag produced no parseable output. DC may be unreachable.",
-                LogFilePath = "test.log"
-            });
+            results.Add(MainWindow.CreateUnparseableDcdiagResult("DC01", emptyOutput, "test.log"));
         }
 
         Assert.Single(results);
         Assert.Equal("DCDiag", results[0].Service);
         Assert.Equal("DC01", results[0].Server);
         Assert.Equal("FAIL", results[0].Result);
-        Assert.Contains("unreachable", results[0].Message);
+        Assert.Contains("execution or connectivity", results[0].Message);
         Assert.Equal("test.log", results[0].LogFilePath);
     }
 
@@ -120,14 +113,7 @@ public class SchedulerLogicTests : IDisposable
         // Simulate the fallback logic
         if (results.Count == 0)
         {
-            results.Add(new TestResult
-            {
-                Service = "DCDiag",
-                Server = "DC01",
-                Result = "FAIL",
-                Message = "DCDiag produced no parseable output. DC may be unreachable.",
-                LogFilePath = "test.log"
-            });
+            results.Add(MainWindow.CreateUnparseableDcdiagResult("DC01", output, "test.log"));
         }
 
         // Should NOT have added the fallback since we have real results
@@ -155,7 +141,7 @@ public class SchedulerLogicTests : IDisposable
         var dc01Results = MainWindow.ParseDCDiagOutput("DC01", dc01Output, "dc01.log").ToList();
         if (dc01Results.Count == 0)
         {
-            dc01Results.Add(new TestResult { Service = "DCDiag", Server = "DC01", Result = "FAIL", Message = "DCDiag produced no parseable output. DC may be unreachable.", LogFilePath = "dc01.log" });
+            dc01Results.Add(MainWindow.CreateUnparseableDcdiagResult("DC01", dc01Output, "dc01.log"));
         }
         allResults.AddRange(dc01Results);
 
@@ -163,7 +149,7 @@ public class SchedulerLogicTests : IDisposable
         var dc02Results = MainWindow.ParseDCDiagOutput("DC02", dc02Output, "dc02.log").ToList();
         if (dc02Results.Count == 0)
         {
-            dc02Results.Add(new TestResult { Service = "DCDiag", Server = "DC02", Result = "FAIL", Message = "DCDiag produced no parseable output. DC may be unreachable.", LogFilePath = "dc02.log" });
+            dc02Results.Add(MainWindow.CreateUnparseableDcdiagResult("DC02", dc02Output, "dc02.log"));
         }
         allResults.AddRange(dc02Results);
 
@@ -785,4 +771,3 @@ public class SchedulerLogicTests : IDisposable
         Assert.True(cache.Contains("log_19.txt"));  // newest preserved
     }
 }
-

@@ -43,7 +43,7 @@ public partial class MainWindow
         allFindings.Clear();
         foreach (TestResult result in allResults)
         {
-            if (result.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase))
+            if (IsNonActionableResult(result.Result))
             {
                 continue;
             }
@@ -116,6 +116,14 @@ public partial class MainWindow
         return !severity.Equals("Info", StringComparison.OrdinalIgnoreCase);
     }
 
+    internal static bool IsNonActionableResult(string result)
+    {
+        return result.Equals("PASS", StringComparison.OrdinalIgnoreCase) ||
+               result.Equals("INFO", StringComparison.OrdinalIgnoreCase) ||
+               result.Equals("WARN", StringComparison.OrdinalIgnoreCase) ||
+               result.Equals("WARNING", StringComparison.OrdinalIgnoreCase);
+    }
+
     private List<AdHealthFinding> GetActiveFindings()
     {
         // Manual filter: avoids LINQ Where allocation
@@ -164,7 +172,7 @@ public partial class MainWindow
 
     internal static string InferSeverity(TestResult result)
     {
-        if (result.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase))
+        if (IsNonActionableResult(result.Result))
         {
             return "Info";
         }
@@ -188,9 +196,11 @@ public partial class MainWindow
 
     internal static string BuildFindingSummary(TestResult result)
     {
-        if (result.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase))
+        if (IsNonActionableResult(result.Result))
         {
-            return $"{result.Service} passed on {result.Server}.";
+            return result.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)
+                ? $"{result.Service} passed on {result.Server}."
+                : $"{result.Service} reported information for {result.Server}.";
         }
 
         return $"{result.Service} failed on {result.Server}.";
@@ -198,7 +208,7 @@ public partial class MainWindow
 
     internal static string SuggestRemediation(TestResult result)
     {
-        if (result.Result.Equals("PASS", StringComparison.OrdinalIgnoreCase))
+        if (IsNonActionableResult(result.Result))
         {
             return "No action required.";
         }

@@ -546,6 +546,7 @@
         <SolidColorBrush x:Key="PassBrush" Color="#66BB6A"/>
         <SolidColorBrush x:Key="FailBrush" Color="#F44336"/>
         <SolidColorBrush x:Key="PendingBrush" Color="#FFA726"/>
+        <SolidColorBrush x:Key="InfoResultBrush" Color="#607D8B"/>
 
         <LinearGradientBrush x:Key="ProgressBarGradient" StartPoint="0,0" EndPoint="1,0">
             <GradientStop Color="#1877F2" Offset="0"/>
@@ -613,6 +614,11 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Result}" Value="PENDING">
                     <Setter Property="Background" Value="{StaticResource PendingBrush}" />
+                    <Setter Property="Foreground" Value="White" />
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Result}" Value="INFO">
+                    <Setter Property="Background" Value="{StaticResource InfoResultBrush}" />
                     <Setter Property="Foreground" Value="White" />
                     <Setter Property="FontWeight" Value="Bold"/>
                 </DataTrigger>

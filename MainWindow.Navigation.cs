@@ -287,6 +287,10 @@ public partial class MainWindow
             {
                 _ = LoadLogsTabContentAsync();
             }
+            else if (LogsListBox.ItemsSource == null && !string.IsNullOrWhiteSpace(latestLogsText))
+            {
+                RefreshLogsWorkspace();
+            }
             else if (LogsListBox.ItemsSource == null)
             {
                 // Show empty state until filters are used

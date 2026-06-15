@@ -237,14 +237,7 @@ public partial class MainWindow
                 List<TestResult> dcDiagResults = ParseDCDiagOutput(dc, dcdiagResult, logFilePath);
                 if (dcDiagResults.Count == 0)
                 {
-                    dcDiagResults.Add(new TestResult
-                    {
-                        Service = "DCDiag",
-                        Server = dc,
-                        Result = "FAIL",
-                        Message = "DCDiag produced no parseable output. DC may be unreachable.",
-                        LogFilePath = logFilePath
-                    });
+                    dcDiagResults.Add(CreateUnparseableDcdiagResult(dc, dcdiagResult, logFilePath));
                 }
                 allResults.AddRange(dcDiagResults);
                 logFilePaths.Add(logFilePath);
@@ -696,6 +689,58 @@ public partial class MainWindow
         return deduped;
     }
 
+    internal static TestResult CreateUnparseableDcdiagResult(string server, string output, string logFilePath)
+    {
+        bool executionFailed = HasDcdiagExecutionFailure(output);
+        return new TestResult
+        {
+            Service = "DCDiag",
+            Server = server,
+            Result = executionFailed ? "FAIL" : "INFO",
+            Message = executionFailed
+                ? "DCDiag produced no parseable output and the raw output indicates an execution or connectivity problem. Open the raw log for details."
+                : "DCDiag output was captured, but AD Guardian could not parse individual test sections. Open the raw log to review the captured output.",
+            LogFilePath = logFilePath
+        };
+    }
+
+    internal static bool HasDcdiagExecutionFailure(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return true;
+        }
+
+        string[] failureMarkers =
+        {
+            "ERROR:",
+            "failed",
+            "failure",
+            "fatal",
+            "exception",
+            "timed out",
+            "timeout",
+            "unreachable",
+            "access is denied",
+            "the rpc server is unavailable",
+            "rpc server is unavailable",
+            "ldap bind failed",
+            "dsgetdcname failed",
+            "could not be found",
+            "is not recognized"
+        };
+
+        for (int i = 0; i < failureMarkers.Length; i++)
+        {
+            if (output.Contains(failureMarkers[i], StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     internal static string BuildTestResultKey(TestResult result)
     {
         return string.Join("|",
@@ -778,6 +823,8 @@ public partial class MainWindow
 
     private async Task<string> RunCommandAsync(string command, string logFilePath, CancellationToken token)
     {
+        using var processTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        processTimeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
         try
         {
             using Process process = new();
@@ -792,15 +839,20 @@ public partial class MainWindow
             };
 
             process.Start();
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(token);
-            Task<string> errorTask = process.StandardError.ReadToEndAsync(token);
+            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(processTimeoutCts.Token);
+            Task<string> errorTask = process.StandardError.ReadToEndAsync(processTimeoutCts.Token);
             try
             {
-                await process.WaitForExitAsync(token).ConfigureAwait(false);
+                await process.WaitForExitAsync(processTimeoutCts.Token).ConfigureAwait(false);
                 string output = await outputTask.ConfigureAwait(false);
                 string error = await errorTask.ConfigureAwait(false);
                 await AppendToLogWithRetryAsync(logFilePath, $"Command: {command}\nTimestamp: {DateTime.Now}\n{output}{error}\n", token).ConfigureAwait(false);
                 return output + error;
+            }
+            catch (OperationCanceledException) when (processTimeoutCts.Token.IsCancellationRequested && !token.IsCancellationRequested)
+            {
+                TryKillProcess(process);
+                return "ERROR: Command timed out after 5 minutes (process may be hung or network blocked)";
             }
             catch (OperationCanceledException)
             {
@@ -1115,7 +1167,12 @@ public partial class MainWindow
 
             if (extractedSections.Count == 0)
             {
-                NotificationService.Show(this, "Log Not Found", "Could not extract any log sections for the selected results.", isError: true);
+                latestLogsText = BuildMergedLogText(uniqueLogFiles);
+                latestLogsFilePath = validResults[0].LogFilePath;
+                RefreshLogSectionEntries(latestLogsText, latestLogsFilePath);
+                LogsFileNameText.Text = $"Raw log shown because no section matched the selected result — {Path.GetFileName(validResults[0].LogFilePath)}";
+                logsTextPending = false;
+                NavigateToSection(5);
                 return;
             }
 
