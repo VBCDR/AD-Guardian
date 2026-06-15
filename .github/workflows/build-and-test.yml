@@ -23,12 +23,9 @@ jobs:
         with:
           dotnet-version: '9.0.x'
           cache: true
-          # No packages.lock.json in this repo, so point the cache key at all
-          # .csproj files. The csproj filenames contain spaces, which
-          # actions/setup-dotnet's path resolver doesn't handle in narrow
-          # globs; use the broad '**/*.csproj' pattern instead. When package
-          # versions change, the cache key changes and packages are re-fetched.
-          cache-dependency-path: '**/*.csproj'
+          # Cache key is derived from packages.lock.json hashes (committed
+          # alongside each .csproj). When a package version changes, the
+          # lock file changes, and the cache auto-invalidates.
       - name: Restore
         run: dotnet restore "AD Guardian.sln"
       - name: Build (Release)
@@ -49,7 +46,6 @@ jobs:
         with:
           dotnet-version: '9.0.x'
           cache: true
-          cache-dependency-path: '**/*.csproj'
       - name: Run required tests
         run: >
           dotnet test "AD Guardian.sln"
@@ -73,7 +69,6 @@ jobs:
         with:
           dotnet-version: '9.0.x'
           cache: true
-          cache-dependency-path: '**/*.csproj'
       - name: Run all other tests (excluding required)
         run: >
           dotnet test "AD Guardian.sln"
