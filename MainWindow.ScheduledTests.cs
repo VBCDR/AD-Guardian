@@ -113,6 +113,15 @@ public partial class MainWindow
 
         string combinedLogPath = runSession.CombinedLogPath;
         await WriteCombinedLogAsync(logFilePaths, combinedLogPath, token);
+
+        // Run repadmin /replsummary once globally (it is not a per-DC command).
+        // Appended after the per-DC log sections so it appears as its own section
+        // in the combined log rather than being mixed into any single DC's output.
+        if (testReplication)
+        {
+            await RunCommandAsync("repadmin /replsummary", combinedLogPath, token);
+        }
+
         latestLogsFilePath = combinedLogPath;
         latestLogsText = File.Exists(combinedLogPath) ? await File.ReadAllTextAsync(combinedLogPath, token).ConfigureAwait(true) : string.Empty;
         isLogContentReady = true;
@@ -140,7 +149,8 @@ public partial class MainWindow
             $"<p style='margin:0 0 8px 0;'>Controllers: <strong>{string.Join(", ", dcList)}</strong></p>" +
             $"<p style='font-size:16px;margin:0 0 4px 0;'>Total tests: <strong>{total}</strong></p>" +
             $"<p style='font-size:16px;margin:0 0 4px 0;color:{passColor};'>Passed: <strong>{passed}</strong></p>" +
-            $"<p style='font-size:16px;margin:0;color:{failColor};'>Failed: <strong>{failed}</strong></p>" +
+            $"<p style='font-size:16px;margin:0 0 4px 0;color:{failColor};'>Failed: <strong>{failed}</strong></p>" +
+            (failed > 0 ? FormatTestResultTable(allResults, dcList, passColor, failColor) : string.Empty) +
             "</div>";
 
             string subject = failed > 0

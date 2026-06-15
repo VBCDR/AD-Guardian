@@ -298,6 +298,8 @@ public partial class MainWindow
                 return;
             }
 
+
+
             ShowRunProgress(
                 "Collecting supplemental data",
                 "Refreshing inventory and telemetry collectors before the dashboard is updated.",
@@ -327,6 +329,15 @@ public partial class MainWindow
 
             string combinedLogPath = runSession.CombinedLogPath;
             await WriteCombinedLogAsync(logFilePaths, combinedLogPath, token);
+
+            // Run repadmin /replsummary once globally (it is not a per-DC command).
+            // Appended after the per-DC log sections so it appears as its own section
+            // in the combined log rather than being mixed into any single DC's output.
+            if (testReplication)
+            {
+                await RunCommandAsync("repadmin /replsummary", combinedLogPath, token);
+            }
+
             latestLogsFilePath = combinedLogPath;
             latestLogsText = File.Exists(combinedLogPath) ? await File.ReadAllTextAsync(combinedLogPath, token).ConfigureAwait(true) : string.Empty;
 
@@ -1026,7 +1037,19 @@ public partial class MainWindow
                 }
                 else
                 {
-                    NotificationService.Show(this, "Log Not Found", "No log files found for the selected results.", isError: true);
+                    bool anyWithEmptyPath = false;
+                    for (int i = 0; i < selected.Count; i++)
+                    {
+                        if (string.IsNullOrWhiteSpace(selected[i].LogFilePath)) { anyWithEmptyPath = true; break; }
+                    }
+                    if (anyWithEmptyPath)
+                    {
+                        NotificationService.Show(this, "Log Not Available", "The selected result(s) do not have a log file path recorded. This can happen when viewing results loaded from a previous session. Try running the tests again to generate fresh logs.");
+                    }
+                    else
+                    {
+                        NotificationService.Show(this, "Log File Missing", "The log file(s) for the selected result(s) no longer exist on disk. Log files are automatically cleaned up after 14 days or when more than 100 runs accumulate. Try running the tests again to generate fresh logs.");
+                    }
                 }
                 return;
             }

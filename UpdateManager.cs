@@ -25,6 +25,7 @@ internal static class UpdateManager
     {
         public string tag_name { get; set; } = string.Empty;
         public string html_url { get; set; } = string.Empty;
+        public string body { get; set; } = string.Empty;
         public GitHubAsset[] assets { get; set; } = Array.Empty<GitHubAsset>();
     }
 
@@ -120,7 +121,7 @@ internal static class UpdateManager
                 return;
             }
 
-            UpdatePromptWindow prompt = new(latestVersion, currentVersion)
+            UpdatePromptWindow prompt = new(latestVersion, currentVersion, release.body)
             {
                 Owner = owner
             };

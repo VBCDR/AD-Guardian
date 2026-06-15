@@ -75,7 +75,26 @@
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Background="White" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,0,6,0">
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Health Score" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="Health Score" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource HeadingBrush}"/>
+                                        <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="13" Foreground="#8A97A6" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                   ToolTipService.ShowDuration="30000">
+                                            <TextBlock.ToolTip>
+                                                <ToolTip MaxWidth="360">
+                                                    <StackPanel Margin="4">
+                                                        <TextBlock Text="How the Health Score is calculated:" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,8"/>
+                                                        <TextBlock Text="1. Current pass rate from the latest run (60% weight)" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                                        <TextBlock Text="2. Average pass rate across the last 5 runs (40% weight)" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                                        <TextBlock Text="3. A findings penalty is then applied:" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                                                        <TextBlock Text="   • Critical findings: -10 points each" FontSize="12" Foreground="#C62828" Margin="0,0,0,2"/>
+                                                        <TextBlock Text="   • High findings: -5 points each" FontSize="12" Foreground="#EF6C00" Margin="0,0,0,2"/>
+                                                        <TextBlock Text="   • Medium findings: -2 points each" FontSize="12" Foreground="#F5A623" Margin="0,0,0,6"/>
+                                                        <TextBlock Text="The penalty is capped at 30 points. The final score is clamped between 0 and 100." FontSize="12" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                                    </StackPanel>
+                                                </ToolTip>
+                                            </TextBlock.ToolTip>
+                                        </TextBlock>
+                                    </StackPanel>
                                     <TextBlock x:Name="HealthScoreText" x:FieldModifier="public" Text="100" FontSize="22" FontWeight="Bold" Foreground="{StaticResource HeadingBrush}" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Border>

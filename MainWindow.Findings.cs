@@ -325,11 +325,21 @@ public partial class MainWindow
 
     internal void OpenFindingLog_Click(object sender, RoutedEventArgs e)
     {
-        if (dgFindings?.SelectedItem is not AdHealthFinding finding ||
-            string.IsNullOrWhiteSpace(finding.LogFilePath) ||
-            !File.Exists(finding.LogFilePath))
+        if (dgFindings?.SelectedItem is not AdHealthFinding finding)
         {
-            NotificationService.Show(this, "Open Related Log", "The selected finding does not have an associated log file.");
+            NotificationService.Show(this, "Open Related Log", "Please select a finding first.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(finding.LogFilePath))
+        {
+            NotificationService.Show(this, "Log Not Available", "The selected finding does not have a log file path recorded. This can happen when viewing results loaded from a previous session. Try running the tests again to generate fresh logs.");
+            return;
+        }
+
+        if (!File.Exists(finding.LogFilePath))
+        {
+            NotificationService.Show(this, "Log File Missing", "The log file for this finding no longer exists on disk. Log files are automatically cleaned up after 14 days or when more than 100 runs accumulate. Try running the tests again to generate fresh logs.");
             return;
         }
 

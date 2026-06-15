@@ -97,7 +97,7 @@
                                                    FontWeight="SemiBold"
                                                    Foreground="{StaticResource HeadingBrush}"
                                                    Margin="0,0,0,4"/>
-                                        <TextBlock Text="Toggle which additional checks run with each test."
+                                        <TextBlock Text="Toggle which additional checks run with each test. DCDiag (dcdiag /c /v) always runs."
                                                    Foreground="{StaticResource BodyBrush}"
                                                    FontSize="13"
                                                    Margin="0,0,0,12"/>
@@ -107,16 +107,30 @@
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel>
-                                                <CheckBox x:Name="SettingsChkDns" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="DNS Resolution" Margin="0,0,0,6" IsChecked="True"/>
-                                                <CheckBox x:Name="SettingsChkReplication" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="Replication (repadmin)" Margin="0,0,0,6" IsChecked="True"/>
-                                                <CheckBox x:Name="SettingsChkTimeSkew" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="Time Skew (w32tm)" Margin="0,0,0,6" IsChecked="True"/>
+                                                <CheckBox x:Name="SettingsChkDns" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="DNS Resolution" Margin="0,0,0,2" IsChecked="True"/>
+                                                <TextBlock Text="Runs: nslookup &lt;DC&gt;" Foreground="#8A97A6" FontSize="11" Margin="24,0,0,10"/>
+                                                <CheckBox x:Name="SettingsChkReplication" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="Replication (repadmin)" Margin="0,0,0,2" IsChecked="True"/>
+                                                <TextBlock Text="Runs: repadmin /showrepl &lt;DC&gt; and repadmin /replsummary" Foreground="#8A97A6" FontSize="11" Margin="24,0,0,10"/>
+                                                <CheckBox x:Name="SettingsChkTimeSkew" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="Time Skew (w32tm)" Margin="0,0,0,2" IsChecked="True"/>
+                                                <TextBlock Text="Runs: w32tm /monitor /computers:&lt;DC&gt;" Foreground="#8A97A6" FontSize="11" Margin="24,0,0,10"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="1">
-                                                <CheckBox x:Name="SettingsChkLdapBind" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="LDAP Bind" Margin="0,0,0,6" IsChecked="True"/>
-                                                <CheckBox x:Name="SettingsChkCertDhcp" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="Cert Services &amp; DHCP" Margin="0,0,0,6" IsChecked="True"/>
-                                                <CheckBox x:Name="SettingsChkSmbSigning" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="SMB/LDAP Signing" Margin="0,0,0,6" IsChecked="True"/>
+                                                <CheckBox x:Name="SettingsChkLdapBind" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="LDAP Bind" Margin="0,0,0,2" IsChecked="True"/>
+                                                <TextBlock Text="Runs: PowerShell ADSI LDAP bind test" Foreground="#8A97A6" FontSize="11" Margin="24,0,0,10"/>
+                                                <CheckBox x:Name="SettingsChkCertDhcp" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="Cert Services &amp; DHCP" Margin="0,0,0,2" IsChecked="True"/>
+                                                <TextBlock Text="Runs: Get-Service ADCS, DhcpServer" Foreground="#8A97A6" FontSize="11" Margin="24,0,0,10"/>
+                                                <CheckBox x:Name="SettingsChkSmbSigning" x:FieldModifier="public" Style="{StaticResource SettingsCheckBoxStyle}" Content="SMB/LDAP Signing" Margin="0,0,0,2" IsChecked="True"/>
+                                                <TextBlock Text="Runs: Get-Service LanmanServer" Foreground="#8A97A6" FontSize="11" Margin="24,0,0,10"/>
                                             </StackPanel>
                                         </Grid>
+                                        <Border Background="#F0F7FF" BorderBrush="#C5D9F1" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,6,0,0">
+                                            <StackPanel>
+                                                <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="#3565A0">
+                                                    <Run FontWeight="SemiBold">Matching your manual commands:</Run>
+                                                    <Run Text=" DCDiag (/c /v) always runs as the base test — this matches your manual dcdiag command. To include repadmin output (/showrepl and /replsummary), ensure " /><Run FontWeight="SemiBold">Replication (repadmin)</Run><Run Text=" is checked. All other options are additional checks that go beyond those commands."/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
