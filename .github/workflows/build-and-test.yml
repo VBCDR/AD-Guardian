@@ -14,7 +14,8 @@ concurrency:
 jobs:
   build:
     name: Build (Release)
-    runs-on: windows-latest
+    runs-on: windows-2022
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
@@ -22,10 +23,12 @@ jobs:
         with:
           dotnet-version: '9.0.x'
           cache: true
-          # No packages.lock.json in this repo yet, so explicitly point the
-          # cache key at the .csproj files. When packages change, the
-          # cache key changes and the packages are re-fetched.
-          cache-dependency-path: 'AD-Guardian/**/*.csproj'
+          # No packages.lock.json in this repo, so point the cache key at all
+          # .csproj files. The csproj filenames contain spaces, which
+          # actions/setup-dotnet's path resolver doesn't handle in narrow
+          # globs; use the broad '**/*.csproj' pattern instead. When package
+          # versions change, the cache key changes and packages are re-fetched.
+          cache-dependency-path: '**/*.csproj'
       - name: Restore
         run: dotnet restore "AD Guardian.sln"
       - name: Build (Release)
@@ -36,7 +39,8 @@ jobs:
   # a hard gate for merges to master.
   required-tests:
     name: Required perf tests (LinqOptimizationBenchmarks + PerformanceTests)
-    runs-on: windows-latest
+    runs-on: windows-2022
+    timeout-minutes: 30
     needs: build
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +49,7 @@ jobs:
         with:
           dotnet-version: '9.0.x'
           cache: true
-          cache-dependency-path: 'AD-Guardian/**/*.csproj'
+          cache-dependency-path: '**/*.csproj'
       - name: Run required tests
         run: >
           dotnet test "AD Guardian.sln"
@@ -58,7 +62,8 @@ jobs:
   # are surfaced but do not block the build.
   all-tests:
     name: All other tests (informational)
-    runs-on: windows-latest
+    runs-on: windows-2022
+    timeout-minutes: 30
     needs: build
     continue-on-error: true
     steps:
@@ -68,7 +73,7 @@ jobs:
         with:
           dotnet-version: '9.0.x'
           cache: true
-          cache-dependency-path: 'AD-Guardian/**/*.csproj'
+          cache-dependency-path: '**/*.csproj'
       - name: Run all other tests (excluding required)
         run: >
           dotnet test "AD Guardian.sln"
