@@ -90,6 +90,18 @@ public partial class UpdatePromptWindow : Window
                 continue;
             }
 
+            // Convert blockquotes: strip the > prefix and any leading space
+            if (trimmed.StartsWith("> "))
+            {
+                string quoteText = CleanInlineMarkdown(trimmed[2..].Trim());
+                if (!string.IsNullOrWhiteSpace(quoteText))
+                {
+                    sb.AppendLine($"    {quoteText}");
+                    previousWasBlank = false;
+                }
+                continue;
+            }
+
             // Convert list items: keep the bullet but clean up markdown markers
             if (trimmed.StartsWith("- ") || trimmed.StartsWith("* "))
             {

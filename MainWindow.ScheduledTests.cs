@@ -150,7 +150,7 @@ public partial class MainWindow
             $"<p style='font-size:16px;margin:0 0 4px 0;'>Total tests: <strong>{total}</strong></p>" +
             $"<p style='font-size:16px;margin:0 0 4px 0;color:{passColor};'>Passed: <strong>{passed}</strong></p>" +
             $"<p style='font-size:16px;margin:0 0 4px 0;color:{failColor};'>Failed: <strong>{failed}</strong></p>" +
-            (failed > 0 ? FormatTestResultTable(allResults, dcList, passColor, failColor) : string.Empty) +
+            FormatTestResultTable(allResults, dcList, passColor, failColor) +
             "</div>";
 
             string subject = failed > 0
