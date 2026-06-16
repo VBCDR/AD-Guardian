@@ -47,8 +47,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Dirs]
 Name: "{commonappdata}\AdHealthMonitor"
 Name: "{commonappdata}\AdHealthMonitor\runs"
-Name: "C:\ADCheckLogs"
-Name: "C:\ADCheckLogs\runs"
+Name: "C:\ADCheckLogs"; Permissions: users-modify
+Name: "C:\ADCheckLogs\runs"; Permissions: users-modify
 
 [Files]
 Source: "{#SourcePayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -267,10 +267,9 @@ begin
   end;
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+    procedure CurStepChanged(CurStep: TSetupStep);
 var
   StateDir: string;
-  StateDbPath: string;
 begin
   if CurStep = ssInstall then
   begin
@@ -284,13 +283,11 @@ begin
     ForceDirectories('C:\ADCheckLogs');
     ForceDirectories('C:\ADCheckLogs\runs');
 
-    SetInstallStatus('Preparing SQLite state database...');
-    if StateDir <> '' then
-    begin
-      StateDbPath := AddBackslash(StateDir) + 'AppState.db';
-      if not FileExists(StateDbPath) then
-        SaveStringToFile(StateDbPath, '', False);
-    end;
+    SetInstallStatus('Preparing application state directories...');
+        if StateDir <> '' then
+        begin
+          { AppState.db is created by the application on first launch via AppStateStore.Initialize(). }
+        end;
   end
   else if CurStep = ssPostInstall then
   begin

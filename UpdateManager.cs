@@ -58,6 +58,8 @@ internal static class UpdateManager
 
     public static async Task CheckForUpdatesOnLaunchAsync(Window owner)
     {
+        await Task.Delay(TimeSpan.FromSeconds(4)).ConfigureAwait(true);
+        if (!owner.IsLoaded || !owner.IsVisible) return;
         await CheckForUpdatesAsync(owner, isManualCheck: false).ConfigureAwait(true);
     }
 
@@ -82,7 +84,7 @@ internal static class UpdateManager
     {
         try
         {
-            TimeSpan requestTimeout = isManualCheck ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(3);
+            TimeSpan requestTimeout = isManualCheck ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(10);
             GitHubRelease? release = await FetchLatestReleaseAsync(requestTimeout).ConfigureAwait(true);
             if (release?.tag_name == null)
             {
@@ -213,8 +215,7 @@ internal static class UpdateManager
     private static async Task<GitHubRelease?> FetchLatestReleaseAsync(TimeSpan timeout)
     {
         using CancellationTokenSource cts = new(timeout);
-        using HttpClient client = new();
-        client.Timeout = timeout;
+        using HttpClient client = new() { Timeout = Timeout.InfiniteTimeSpan };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("ADGuardianApp");
         string url = $"https://api.github.com/repos/{GitHubRepo}/releases/latest";
         string json = await client.GetStringAsync(url, cts.Token).ConfigureAwait(false);
@@ -324,8 +325,7 @@ internal static class UpdateManager
         {
             FileName = installerPath,
             Arguments = "/UPDATE /CLOSEAPPLICATIONS",
-            UseShellExecute = true,
-            Verb = "runas"
+            UseShellExecute = true
         });
     }
 

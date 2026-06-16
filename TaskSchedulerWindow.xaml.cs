@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -14,7 +15,7 @@ namespace AdHealthMonitor;
 public partial class TaskSchedulerWindow : Window
 {
     private readonly AppStateStore appStateStore;
-    private readonly List<ScheduledTask> scheduledTasks = new();
+    private readonly ObservableCollection<ScheduledTask> scheduledTasks = new();
     private int selectedTaskIndex = -1;
 
     public TaskSchedulerWindow(string email)
@@ -24,30 +25,20 @@ public partial class TaskSchedulerWindow : Window
         InitializeComponent();
         TaskListView.SelectionChanged += TaskListView_SelectionChanged;
         LoadScheduledTasks();
-        RefreshTaskList();
-    }
-
-    private void Window_Loaded(object sender, RoutedEventArgs e)
-    {
     }
 
     protected override void OnClosing(CancelEventArgs e)
     {
         TaskListView.SelectionChanged -= TaskListView_SelectionChanged;
-        SaveScheduledTasks();
-        base.OnClosing(e);
-    }
-
-    private void SaveScheduledTasks()
-    {
         try
         {
             appStateStore.SaveScheduledTasks(scheduledTasks);
         }
-        catch (Exception ex)
+        catch
         {
-            NotificationService.Show(this, "Error", "Error saving tasks: " + ex.Message, isError: true);
+            // Silently persist during close; not showing a modal here avoids re-entrancy deadlocks.
         }
+        base.OnClosing(e);
     }
 
     private void LoadScheduledTasks()
@@ -55,7 +46,10 @@ public partial class TaskSchedulerWindow : Window
         try
         {
             scheduledTasks.Clear();
-            scheduledTasks.AddRange(appStateStore.LoadScheduledTasks());
+            foreach (var task in appStateStore.LoadScheduledTasks())
+            {
+                scheduledTasks.Add(task);
+            }
         }
         catch (Exception ex)
         {
@@ -203,8 +197,7 @@ public partial class TaskSchedulerWindow : Window
 
     private void RefreshTaskList()
     {
-        TaskListView.ItemsSource = null;
-        TaskListView.ItemsSource = scheduledTasks;
+        TaskListView.ItemsSource ??= scheduledTasks;
     }
 
     private void ClearInputFields()
@@ -261,11 +254,12 @@ public partial class TaskSchedulerWindow : Window
             {
                 loadingWindow = new(title, message)
                 {
-                    Owner = this
+                    Owner = this,
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner
                 };
-                IsEnabled = false;
                 loadingWindow.Show();
-                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
+                IsEnabled = false;
             }
 
             await operationTask.ConfigureAwait(true);

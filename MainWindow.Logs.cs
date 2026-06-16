@@ -2,35 +2,20 @@
 // Extracted from MainWindow.xaml.cs during partial class refactoring.
 
 using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-
-using System.Net;
-using System.Net.Http;
-using System.Net.Mail;
-using System.Reflection;
-using System.Runtime.Versioning;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Documents;
 using System.Windows.Data;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Media.Effects;
-using System.Windows.Navigation;
 using System.Windows.Threading;
 using Domain_Guardian;
 using Microsoft.Win32;
-using Newtonsoft.Json;
 
 namespace AdHealthMonitor;
 
@@ -145,15 +130,13 @@ public partial class MainWindow
 
     private IReadOnlyList<LogLine> GetCachedLogLines(string text)
     {
-        int textHash = text.GetHashCode(StringComparison.Ordinal);
-        if (cachedLogLinesLength == text.Length && cachedLogLinesHash == textHash)
+        if (string.Equals(cachedLogLinesKey, text, StringComparison.Ordinal))
         {
             return cachedLogLines;
         }
 
         cachedLogLines = BuildLogLines(text);
-        cachedLogLinesLength = text.Length;
-        cachedLogLinesHash = textHash;
+        cachedLogLinesKey = text;
         return cachedLogLines;
     }
 

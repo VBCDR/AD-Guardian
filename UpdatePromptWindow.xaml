@@ -3,6 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Update Available"
         Width="480"
+        MinWidth="480"
+        MaxWidth="600"
+        MaxHeight="600"
+        SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner"
         Background="#F5F7FA"
         ResizeMode="NoResize"
@@ -13,7 +17,7 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
@@ -49,7 +53,8 @@
                             BorderThickness="0"
                             Padding="0"
                             HorizontalAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
+                        <Border Background="#F0F4F8" BorderBrush="#D7E2EC" BorderThickness="1" CornerRadius="8" Padding="10,8">
+                            <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="ChangelogToggleIcon"
                                        Text="&#xE76C;"
                                        FontFamily="Segoe MDL2 Assets"
@@ -61,25 +66,26 @@
                                        Text="View Changes"
                                        FontSize="13"
                                        FontWeight="SemiBold"
-                                       Foreground="#1A73E8"/>
-                        </StackPanel>
-                    </Button>
+                                        Foreground="#1A73E8"/>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
                     <Border x:Name="ChangelogPanel"
-                            Background="White"
+                            Background="#FAFBFC"
                             BorderBrush="#D7E2EC"
                             BorderThickness="1"
                             CornerRadius="8"
                             Padding="14"
                             Margin="0,8,0,0"
                             Visibility="Collapsed"
-                            MaxHeight="220">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled">
+                            MaxHeight="260">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <TextBlock x:Name="ChangelogText"
                                        TextWrapping="Wrap"
                                        FontSize="12.5"
                                        Foreground="#334155"
-                                       LineHeight="20"/>
+                                       LineHeight="20"
+                                       FontFamily="Segoe UI"/>
                         </ScrollViewer>
                     </Border>
                 </StackPanel>

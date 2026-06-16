@@ -2,7 +2,6 @@
 using System.Runtime.Versioning;
 using System.Windows;
 
-
 namespace AdHealthMonitor
 {
     // The app.manifest specifies requireAdministrator, so the process is always
@@ -10,6 +9,9 @@ namespace AdHealthMonitor
     [SupportedOSPlatform("windows")]
     public partial class App : System.Windows.Application
     {
+        internal const string LogDirectoryPath = @"C:\ADCheckLogs";
+        internal const string RunLogsDirectoryName = "runs";
+
         protected override void OnStartup(StartupEventArgs e)
         {
             bool isInitializationLaunch = e.Args.Length > 0 &&
@@ -43,8 +45,8 @@ namespace AdHealthMonitor
         private static void InitializeAppInfrastructure()
         {
             AppStateStore.CreateDefault().Initialize();
-            Directory.CreateDirectory(@"C:\ADCheckLogs");
-            Directory.CreateDirectory(Path.Combine(@"C:\ADCheckLogs", "runs"));
+            Directory.CreateDirectory(LogDirectoryPath);
+            Directory.CreateDirectory(Path.Combine(LogDirectoryPath, RunLogsDirectoryName));
         }
     }
 }

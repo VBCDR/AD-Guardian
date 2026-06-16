@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Mail;
 using System.Reflection;
 using System.Runtime.Versioning;
@@ -28,6 +27,7 @@ using Domain_Guardian;
 using Microsoft.Win32;
 using Newtonsoft.Json;
 
+
 namespace AdHealthMonitor;
 
 [SupportedOSPlatform("windows")]
@@ -35,22 +35,6 @@ public partial class MainWindow : Window, IDisposable
 {
     private bool isSidebarCollapsed;
     private bool _disposed;
-
-    public class GitHubRelease
-    {
-        public string tag_name { get; set; } = string.Empty;
-        public string html_url { get; set; } = string.Empty;
-        public GitHubAsset[] assets { get; set; } = Array.Empty<GitHubAsset>();
-    }
-
-    public class GitHubAsset
-    {
-        public string name { get; set; } = string.Empty;
-        public string browser_download_url { get; set; } = string.Empty;
-        // Mirrors UpdateManager.GitHubAsset — kept here so the WPF UI's independent
-        // deserialisation stays in sync with the verified update path.
-        public string digest { get; set; } = string.Empty;
-    }
 
     private sealed class CachedScheduledLog
     {
@@ -95,8 +79,8 @@ public partial class MainWindow : Window, IDisposable
     private AdInventorySnapshot latestInventory = AdInventorySnapshot.Empty;
     private TelemetrySnapshot latestTelemetry = TelemetrySnapshot.Empty;
     private DashboardSnapshot? cachedDashboardSnapshot;
-    private const string LogDirectoryPath = @"C:\ADCheckLogs";
-    private const string RunLogsDirectoryName = "runs";
+    private const string LogDirectoryPath = App.LogDirectoryPath;
+    private const string RunLogsDirectoryName = App.RunLogsDirectoryName;
 
     private readonly List<ScheduledTask> scheduledTasks = new();
     internal static readonly Brush ActiveNavBgBrush = FrozenBrush(Color.FromRgb(26, 115, 232));
@@ -141,8 +125,7 @@ public partial class MainWindow : Window, IDisposable
     private bool historyFullyLoaded;
     private Task? historyLoadTask;
     private Task? startupInitializationTask;
-    private int cachedLogLinesHash;
-    private int cachedLogLinesLength = -1;
+    private string? cachedLogLinesKey;
     private IReadOnlyList<LogLine> cachedLogLines = Array.Empty<LogLine>();
     private readonly Dictionary<string, CachedScheduledLog> scheduledLogCache = new(StringComparer.OrdinalIgnoreCase);
     private DateTime lastProgressUiUpdateUtc = DateTime.MinValue;
@@ -195,12 +178,20 @@ public partial class MainWindow : Window, IDisposable
             ShowInTaskbar = false;
             _ = Dispatcher.BeginInvoke(async () =>
             {
-                if (startupInitializationTask != null)
+                try
                 {
-                    await startupInitializationTask.ConfigureAwait(true);
-                }
+                    if (startupInitializationTask != null)
+                    {
+                        await startupInitializationTask.ConfigureAwait(true);
+                    }
 
-                await RunScheduledTestsAsync(scheduledTaskName).ConfigureAwait(true);
+                    if (_disposed || !IsLoaded) return;
+                    await RunScheduledTestsAsync(scheduledTaskName).ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[ScheduledLaunch] Unhandled error: {ex}");
+                }
             }, DispatcherPriority.Background);
         }
     }
@@ -673,7 +664,14 @@ public partial class MainWindow : Window, IDisposable
 
         _ = Dispatcher.BeginInvoke(async () =>
         {
-            await UpdateManager.ScheduleLaunchUpdateCheckAsync(this).ConfigureAwait(true);
+            try
+            {
+                await UpdateManager.ScheduleLaunchUpdateCheckAsync(this).ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Update check failed: {ex}");
+            }
         }, DispatcherPriority.ApplicationIdle);
     }
 
@@ -705,6 +703,12 @@ public partial class MainWindow : Window, IDisposable
         }
         int index = 0;
 
+        // Uses EqualityComparer<T>.Default for the skip-if-unchanged optimisation.
+        // For reference types that do not override Equals this is reference equality,
+        // so items whose content changes through the same reference will always be replaced.
+        // If a future T overrides Equals with value semantics, items whose content
+        // changed but whose Equals still returns true would be skipped, causing stale
+        // data in the UI.
         while (index < sourceItems.Count && index < target.Count)
         {
             if (!EqualityComparer<T>.Default.Equals(target[index], sourceItems[index]))
@@ -806,8 +810,7 @@ public partial class MainWindow : Window, IDisposable
         latestLogsText = string.Empty;
         latestLogsFilePath = string.Empty;
         isLogContentReady = false;
-        cachedLogLinesLength = -1;
-        cachedLogLinesHash = 0;
+        cachedLogLinesKey = null;
         cachedLogLines = Array.Empty<LogLine>();
         logsTextPending = false;
         dgLogsEntries.SelectedItem = null;
@@ -1045,9 +1048,9 @@ public partial class MainWindow : Window, IDisposable
                     Owner = this,
                     WindowStartupLocation = WindowStartupLocation.CenterOwner
                 };
-                IsEnabled = false;
                 loadingWindow.Show();
                 await Dispatcher.Yield(DispatcherPriority.Render);
+                IsEnabled = false;
             }
 
             await operationTask.ConfigureAwait(true);
@@ -1075,9 +1078,12 @@ public partial class MainWindow : Window, IDisposable
         cancellationTokenSource?.Dispose();
         scheduledLogCache.Clear();
         cachedLogLines = Array.Empty<LogLine>();
-        cachedLogLinesLength = -1;
-        cachedLogLinesHash = 0;
+        cachedLogLinesKey = null;
         latestLogsText = string.Empty;
+        if (startupInitializationTask != null)
+        {
+            startupInitializationTask = null;
+        }
     }
 
     protected override void OnClosing(CancelEventArgs e)

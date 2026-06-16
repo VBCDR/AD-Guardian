@@ -2,35 +2,23 @@
 // Extracted from MainWindow.xaml.cs during partial class refactoring.
 
 using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
 using System.Net.Mail;
-using System.Reflection;
-using System.Runtime.Versioning;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Documents;
 using System.Windows.Data;
-using System.Windows.Input;
+using System.Windows.Documents;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Media.Effects;
-using System.Windows.Navigation;
 using System.Windows.Threading;
 using Domain_Guardian;
-using Microsoft.Win32;
-using Newtonsoft.Json;
 
 namespace AdHealthMonitor;
 
@@ -171,19 +159,59 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
-            Debug.WriteLine($"Scheduled run '{scheduledTaskName}' was cancelled.");
+            string message = $"Scheduled run '{scheduledTaskName}' was cancelled.";
+            Debug.WriteLine(message);
+            try { File.AppendAllText(Path.Combine(LogDirectoryPath, "scheduled-errors.log"), $"{DateTime.UtcNow:O} {message}{Environment.NewLine}"); } catch { }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Scheduled run '{scheduledTaskName}' failed: {ex}");
+            string message = $"Scheduled run '{scheduledTaskName}' failed: {ex}";
+            Debug.WriteLine(message);
+            try { File.AppendAllText(Path.Combine(LogDirectoryPath, "scheduled-errors.log"), $"{DateTime.UtcNow:O} {message}{Environment.NewLine}"); } catch { }
         }
         finally
         {
-            // Only shutdown after a brief delay to allow any pending UI cleanup
-            // Do not shutdown immediately if a modal dialog is showing (scheduled mode hides main window)
             if (isScheduledLaunch)
             {
-                _ = Task.Delay(500).ContinueWith(_ => Application.Current.Dispatcher.Invoke(Application.Current.Shutdown));
+                try
+                {
+                    if (allResults.Count > 0)
+                    {
+                        int total = allResults.Count;
+                        int passed = 0, failed = 0;
+                        for (int i = 0; i < total; i++)
+                        {
+                            if (allResults[i].Result.Equals("PASS", StringComparison.OrdinalIgnoreCase)) passed++;
+                            else if (allResults[i].Result.Equals("FAIL", StringComparison.OrdinalIgnoreCase)) failed++;
+                        }
+                        await SaveTestHistoryAsync(new TestHistoryEntry
+                        {
+                            RunDate = DateTime.Now,
+                            Total = total,
+                            Passed = passed,
+                            Failed = failed,
+                            Details = $"{(failed > 0 ? "FAILED" : "PARTIAL")} - {scheduledTaskName}",
+                            LogFilePath = latestLogsFilePath ?? string.Empty,
+                            TestType = "Scheduled"
+                        }).ConfigureAwait(true);
+                    }
+                }
+                catch (Exception historyEx)
+                {
+                    Debug.WriteLine($"Failed to save partial history during shutdown: {historyEx}");
+                }
+
+                _ = Task.Delay(500).ContinueWith(_ =>
+                {
+                    try
+                    {
+                        Application.Current?.Dispatcher.Invoke(() => Application.Current?.Shutdown());
+                    }
+                    catch (Exception shutdownEx)
+                    {
+                        Debug.WriteLine($"Shutdown error: {shutdownEx}");
+                    }
+                });
             }
         }
     }
@@ -201,6 +229,10 @@ public partial class MainWindow
                 "Loading run results",
                 "Parsing the selected run and preparing the dashboard.",
                 () => LoadScheduledResultsFromLogAsync(logFilePath)).ConfigureAwait(true);
+            if (!string.IsNullOrWhiteSpace(latestLogsText))
+            {
+                DisplayTestResults(latestLogsText);
+            }
         }
     }
 
@@ -259,7 +291,6 @@ public partial class MainWindow
         latestLogsFilePath = logFilePath;
         latestLogsText = output;
         isLogContentReady = true;
-        DisplayTestResults(output);
         ForceRefreshDashboard();
         Debug.WriteLine($"Scheduled log '{Path.GetFileName(logFilePath)}' loaded in {loadStopwatch.ElapsedMilliseconds}ms.");
         Activate();

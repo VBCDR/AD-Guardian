@@ -2,34 +2,21 @@
 // Extracted from MainWindow.xaml.cs during partial class refactoring.
 
 using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Net.Mail;
-using System.Reflection;
-using System.Runtime.Versioning;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Documents;
 using System.Windows.Data;
-using System.Windows.Input;
+using System.Windows.Documents;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Media.Effects;
-using System.Windows.Navigation;
 using System.Windows.Threading;
 using Domain_Guardian;
-using Microsoft.Win32;
 using Newtonsoft.Json;
 
 namespace AdHealthMonitor;
@@ -77,13 +64,15 @@ public partial class MainWindow
             cachedDashboardSnapshot = snapshot;
             await Task.Run(() => appStateStore.SaveDashboardSnapshot(snapshot)).ConfigureAwait(true);
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"Failed to persist dashboard snapshot: {ex}");
         }
     }
 
     private void RefreshDashboardCore()
     {
+        if (!IsLoaded) return;
         // Pre-compute counts once to avoid repeated LINQ scans over the same collections.
         int passCount = 0, failCount = 0;
         for (int i = 0; i < allResults.Count; i++)
@@ -123,7 +112,7 @@ public partial class MainWindow
             .Append(latestTelemetry.TotalServices).Append('|')
             .Append(securityFindingCount);
         string newHash = hashBuilder.ToString();
-        if (_dashboardHash == newHash) return;
+        if (string.Equals(_dashboardHash, newHash, StringComparison.Ordinal)) return;
         _dashboardHash = newHash;
 
         if (!HasLiveDashboardData() && cachedDashboardSnapshot != null)

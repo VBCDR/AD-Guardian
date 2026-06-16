@@ -45,6 +45,10 @@ public partial class SchedulerTabPage : UserControl
     private void UpdateSchedulerLayout()
     {
         double width = ActualWidth;
+        if (ScheduleFieldsGrid.RowDefinitions.Count < 3 || ScheduleFieldsGrid.ColumnDefinitions.Count < 3)
+        {
+            return;
+        }
         if (width < 800 && width > 0)
         {
             System.Windows.Controls.Grid.SetRow(FreqPanel, 0);

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 using Microsoft.Win32.TaskScheduler;
 
 namespace AdHealthMonitor;
@@ -15,7 +16,7 @@ public static class WindowsTaskSchedulerInterop
     {
         try
         {
-            CreateViaTaskScheduler(task);
+            RunOnStaThread(() => CreateViaTaskScheduler(task));
         }
         catch (Exception ex) when (ShouldFallbackToSchTasks(ex))
         {
@@ -27,7 +28,7 @@ public static class WindowsTaskSchedulerInterop
     {
         try
         {
-            DeleteViaTaskScheduler(taskName);
+            RunOnStaThread(() => DeleteViaTaskScheduler(taskName));
         }
         catch (Exception ex) when (ShouldFallbackToSchTasks(ex))
         {
@@ -35,9 +36,25 @@ public static class WindowsTaskSchedulerInterop
         }
     }
 
+    private static void RunOnStaThread(System.Action action)
+    {
+        System.Threading.Thread thread = new(() => action())
+        {
+            IsBackground = true,
+            Name = "TaskScheduler-STA"
+        };
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+    }
+
     private static void CreateViaTaskScheduler(ScheduledTask task)
     {
-        DateTime startBoundary = task.StartDate.Date + TimeSpan.Parse(task.StartTime, CultureInfo.InvariantCulture);
+        if (!TimeSpan.TryParse(task.StartTime, CultureInfo.InvariantCulture, out TimeSpan startOffset))
+        {
+            startOffset = TimeSpan.FromHours(8);
+        }
+        DateTime startBoundary = task.StartDate.Date + startOffset;
 
         using TaskService ts = new();
         TaskDefinition td = ts.NewTask();
@@ -100,7 +117,11 @@ public static class WindowsTaskSchedulerInterop
 
     private static void CreateViaSchTasks(ScheduledTask task)
     {
-        DateTime startBoundary = task.StartDate.Date + TimeSpan.Parse(task.StartTime, CultureInfo.InvariantCulture);
+        if (!TimeSpan.TryParse(task.StartTime, CultureInfo.InvariantCulture, out TimeSpan startOffset))
+        {
+            startOffset = TimeSpan.FromHours(8);
+        }
+        DateTime startBoundary = task.StartDate.Date + startOffset;
         string exePath = Process.GetCurrentProcess().MainModule?.FileName
             ?? throw new InvalidOperationException("Unable to resolve the application executable path.");
         string taskName = $"ADG_{task.TaskName}";

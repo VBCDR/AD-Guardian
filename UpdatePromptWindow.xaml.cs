@@ -11,7 +11,6 @@ public partial class UpdatePromptWindow : Window
 {
     private const string UnknownVersion = "unknown";
     private bool isChangelogExpanded;
-    private double collapsedHeight;
 
     public bool UpdateConfirmed { get; private set; }
 
@@ -30,8 +29,6 @@ public partial class UpdatePromptWindow : Window
             ChangelogText.Text = ParseMarkdownToPlainText(releaseBody);
             ChangelogToggleWrapper.Visibility = Visibility.Visible;
         }
-
-        Loaded += (_, _) => collapsedHeight = ActualHeight;
     }
 
     private static string GetInstalledFileVersion()
@@ -168,18 +165,14 @@ public partial class UpdatePromptWindow : Window
         if (isChangelogExpanded)
         {
             ChangelogPanel.Visibility = Visibility.Visible;
-            ChangelogToggleIcon.Text = "\uE70E"; // Chevron up
+            ChangelogToggleIcon.Text = "\uE70E";
             ChangelogToggleText.Text = "Hide Changes";
-            // Adjust window height to accommodate changelog
-            SizeToContent = SizeToContent.Height;
         }
         else
         {
             ChangelogPanel.Visibility = Visibility.Collapsed;
-            ChangelogToggleIcon.Text = "\uE76C"; // Chevron right
+            ChangelogToggleIcon.Text = "\uE76C";
             ChangelogToggleText.Text = "View Changes";
-            SizeToContent = SizeToContent.Manual;
-            Height = collapsedHeight > 0 ? collapsedHeight : 240;
         }
     }
 

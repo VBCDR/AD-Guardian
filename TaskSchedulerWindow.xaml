@@ -7,7 +7,7 @@
         WindowStartupLocation="CenterScreen"
         Background="#EEF3F8"
         FontFamily="Segoe UI"
-        Loaded="Window_Loaded">
+        >
 
     <Window.Resources>
         <SolidColorBrush x:Key="PanelBorderBrush" Color="#D7E2EC"/>
