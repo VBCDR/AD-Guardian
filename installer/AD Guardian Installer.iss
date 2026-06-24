@@ -51,6 +51,10 @@ Name: "C:\ADCheckLogs"; Permissions: users-modify
 Name: "C:\ADCheckLogs\runs"; Permissions: users-modify
 
 [Files]
+; restartreplace queues in-use file replacement via MoveFileEx(
+; MOVEFILE_DELAY_UNTIL_REBOOT). Without it, AD Guardian self-updates fail
+; with "DeleteFile failed; code 5. Access is denied." (clrjit.dll locked
+; by running Domain Guardian.exe.) Do NOT remove.
 Source: "{#SourcePayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace
 
 [Icons]
