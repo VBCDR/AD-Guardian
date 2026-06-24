@@ -123,7 +123,7 @@ internal static class UpdateManager
                 return;
             }
 
-            UpdatePromptWindow prompt = new(latestVersion, currentVersion, release.body)
+            UpdatePromptWindow prompt = new(latestVersion, currentVersion, release.html_url)
             {
                 Owner = owner
             };

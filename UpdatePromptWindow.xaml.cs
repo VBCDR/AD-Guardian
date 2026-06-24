@@ -1,8 +1,6 @@
 using System;
-using System.IO;
+using System.Diagnostics;
 using System.Reflection;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Windows;
 
 namespace Domain_Guardian;
@@ -10,13 +8,15 @@ namespace Domain_Guardian;
 public partial class UpdatePromptWindow : Window
 {
     private const string UnknownVersion = "unknown";
-    private bool isChangelogExpanded;
+    private readonly string? _releaseHtmlUrl;
 
     public bool UpdateConfirmed { get; private set; }
 
-    public UpdatePromptWindow(Version latestVersion, Version currentVersion, string? releaseBody = null)
+    public UpdatePromptWindow(Version latestVersion, Version currentVersion, string? releaseHtmlUrl = null)
     {
         InitializeComponent();
+
+        _releaseHtmlUrl = string.IsNullOrWhiteSpace(releaseHtmlUrl) ? null : releaseHtmlUrl;
 
         VersionInfoText.Text = $"v{currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build} \u2192 v{latestVersion.Major}.{latestVersion.Minor}.{latestVersion.Build}";
         MessageText.Text = "A new version of AD Guardian is available. The latest installer will be downloaded and launched automatically.";
@@ -24,11 +24,11 @@ public partial class UpdatePromptWindow : Window
             .GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration ?? UnknownVersion;
         InstalledVersionText.Text = $"Installed binary: {GetInstalledFileVersion()} (build: {buildConfig})";
 
-        if (!string.IsNullOrWhiteSpace(releaseBody))
-        {
-            ChangelogText.Text = ParseMarkdownToPlainText(releaseBody);
-            ChangelogToggleWrapper.Visibility = Visibility.Visible;
-        }
+        // Hide the inline View Changelog button when the GitHub URL wasn't
+        // supplied (e.g. older release API responses without html_url).
+        ViewChangelogButton.Visibility = string.IsNullOrWhiteSpace(_releaseHtmlUrl)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private static string GetInstalledFileVersion()
@@ -45,134 +45,49 @@ public partial class UpdatePromptWindow : Window
     }
 
     /// <summary>
-    /// Converts GitHub-flavoured markdown into readable plain text for WPF display.
-    /// Strips headers, bullet markers, links, and bold/italic markers while
-    /// preserving the structure and readability of the release notes.
+    /// E2E test seam — lets unit tests intercept the browser-launch
+    /// <see cref="Process.Start(ProcessStartInfo)"/> call so they don't spawn a
+    /// real browser in the test sandbox. Default behaviour matches production
+    /// (<see cref="Process.Start(ProcessStartInfo)"/> with
+    /// <c>UseShellExecute=true</c>). Exposed as <c>internal</c> so the test
+    /// assembly (which has <c>InternalsVisibleTo</c>) can swap it out around a
+    /// single test invocation; production builds never touch this field.
+    ///
+    /// Marked at file scope so save/restore in <c>try/finally</c> in tests is
+    /// easy; xUnit runs methods within a single class sequentially so parallel
+    /// tests cannot collide on the override.
     /// </summary>
-    internal static string ParseMarkdownToPlainText(string markdown)
+    internal static Func<ProcessStartInfo, Process?> LaunchUrlRunner = Process.Start;
+
+    private void ViewChangelogButton_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(markdown))
+        if (string.IsNullOrWhiteSpace(_releaseHtmlUrl))
         {
-            return string.Empty;
+            e.Handled = true;
+            return;
         }
 
-        StringBuilder sb = new();
-        using StringReader reader = new(markdown);
-        string? line;
-        bool previousWasBlank = false;
-
-        while ((line = reader.ReadLine()) != null)
+        try
         {
-            string trimmed = line.Trim();
-
-            // Skip horizontal rules (---, ***, ___)
-            if (Regex.IsMatch(trimmed, @"^[-*_]{3,}$"))
+            // Process.Start with UseShellExecute=true hands the URL to the
+            // user's default browser. Silently swallows launch failures so a
+            // misconfigured browser never blocks the update decision. Routed
+            // through LaunchUrlRunner so unit tests can intercept without
+            // spawning a real browser (production behaviour unchanged).
+            LaunchUrlRunner(new ProcessStartInfo
             {
-                continue;
-            }
-
-            // Convert markdown headers to plain text with a bullet prefix
-            if (trimmed.StartsWith('#'))
-            {
-                string headerText = Regex.Replace(trimmed, @"^#{1,6}\s*", "").Trim();
-                if (!string.IsNullOrWhiteSpace(headerText))
-                {
-                    if (sb.Length > 0 && !previousWasBlank)
-                    {
-                        sb.AppendLine();
-                    }
-                    sb.AppendLine(headerText);
-                    previousWasBlank = false;
-                }
-                continue;
-            }
-
-            // Convert blockquotes: strip the > prefix and any leading space
-            if (trimmed.StartsWith("> "))
-            {
-                string quoteText = CleanInlineMarkdown(trimmed[2..].Trim());
-                if (!string.IsNullOrWhiteSpace(quoteText))
-                {
-                    sb.AppendLine($"    {quoteText}");
-                    previousWasBlank = false;
-                }
-                continue;
-            }
-
-            // Convert list items: keep the bullet but clean up markdown markers
-            if (trimmed.StartsWith("- ") || trimmed.StartsWith("* "))
-            {
-                string itemText = trimmed[2..].Trim();
-                itemText = CleanInlineMarkdown(itemText);
-                sb.AppendLine($"  \u2022  {itemText}");
-                previousWasBlank = false;
-                continue;
-            }
-
-            // Numbered list items
-            if (Regex.IsMatch(trimmed, @"^\d+\.\s"))
-            {
-                string itemText = Regex.Replace(trimmed, @"^\d+\.\s*", "").Trim();
-                itemText = CleanInlineMarkdown(itemText);
-                sb.AppendLine($"    {itemText}");
-                previousWasBlank = false;
-                continue;
-            }
-
-            // Blank lines
-            if (string.IsNullOrWhiteSpace(trimmed))
-            {
-                if (!previousWasBlank && sb.Length > 0)
-                {
-                    sb.AppendLine();
-                    previousWasBlank = true;
-                }
-                continue;
-            }
-
-            // Regular paragraph text
-            string cleaned = CleanInlineMarkdown(trimmed);
-            sb.AppendLine(cleaned);
-            previousWasBlank = false;
+                FileName = _releaseHtmlUrl,
+                UseShellExecute = true
+            });
         }
-
-        return sb.ToString().TrimEnd();
-    }
-
-    /// <summary>
-    /// Strips inline markdown formatting: bold (**), italic (*), links ([text](url)),
-    /// inline code (`), and image references (![alt](url)).
-    /// </summary>
-    private static string CleanInlineMarkdown(string text)
-    {
-        // Strip HTML tags that GitHub release bodies sometimes contain
-        text = Regex.Replace(text, @"<[^>]+>", "");
-        // Remove image references: ![alt](url) -> alt
-        text = Regex.Replace(text, @"!\[([^\]]*)\]\([^)]*\)", "$1");
-        // Remove links but keep text: [text](url) -> text
-        text = Regex.Replace(text, @"\[([^\]]*)\]\([^)]*\)", "$1");
-        // Remove bold/italic markers: **text** or *text* -> text (prefer * over _ to avoid snake_case)
-        text = Regex.Replace(text, @"\*{1,3}([^*]+)\*{1,3}", "$1");
-        // Remove inline code: `text` -> text
-        text = Regex.Replace(text, @"`([^`]*)`", "$1");
-        return text.Trim();
-    }
-
-    private void ChangelogToggleButton_Click(object sender, RoutedEventArgs e)
-    {
-        isChangelogExpanded = !isChangelogExpanded;
-
-        if (isChangelogExpanded)
+        catch
         {
-            ChangelogPanel.Visibility = Visibility.Visible;
-            ChangelogToggleIcon.Text = "\uE70E";
-            ChangelogToggleText.Text = "Hide Changes";
+            // Best-effort — the button still surfaces the URL in its label,
+            // so the user can copy it manually if the launch failed.
         }
-        else
+        finally
         {
-            ChangelogPanel.Visibility = Visibility.Collapsed;
-            ChangelogToggleIcon.Text = "\uE76C";
-            ChangelogToggleText.Text = "View Changes";
+            e.Handled = true;
         }
     }
 
