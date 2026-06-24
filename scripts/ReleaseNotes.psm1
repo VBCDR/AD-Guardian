@@ -1,4 +1,4 @@
-# ── AD Guardian — natural-tone release notes generator ────────────────────────
+﻿# ── AD Guardian — natural-tone release notes generator ────────────────────────
 #
 # Builds a short, friendly release body from commits since the previous tag, in
 # the form:
