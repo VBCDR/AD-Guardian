@@ -2,7 +2,7 @@
 
 Welcome to **AD Guardian** — a tool built to monitor and test Active Directory health in a smart, automated, and user-friendly way. It simplifies routine AD checks, schedules tests, and sends detailed email notifications so you can always stay on top of your environment.
 
-**Current Version: 2.0.7** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
+**Current Version: [v2.0.24](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.24)** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
 
 ## Features
 
@@ -31,6 +31,14 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
   A clean, animated WPF UI with sidebar navigation, lazy-loaded tab pages, and responsive layout.
 
 ## Changelog
+
+### v2.0.24
+- "View Changelog on GitHub" link button replaces the inline markdown toggle in the Update window
+- New `scripts/ReleaseNotes.psm1` module generates natural-tone release notes for the GitHub release body
+- 15 xUnit tests added for the release-notes generator (highlights, boot-commit filter, no-prior-tag fallback, MaxBullets validation)
+- 4 WPF STA E2E tests added for the changelog button
+- [Full release notes on GitHub →](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.24)
+- 596 total tests, all passing at release time
 
 ### v2.0.7
 - Fixed false positive failures in optional diagnostic checks (TimeSkew, LDAP Bind, SMB/LDAP Signing)
@@ -78,7 +86,7 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 
 ### Installation
 
-1. **Download the installer** from the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest)
+1. **Download the installer** for [v2.0.24](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.24) (or grab the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest) for the most recent build)
 
    — or —
 
