@@ -9,7 +9,6 @@
 
 ## Still needs follow-up
 
-- `MainWindow.xaml.cs`: logs are still written to `C:\ADCheckLogs`, which can fail under restricted permissions and should move to `%AppData%` or `%ProgramData%`.
 - `MainWindow.xaml.cs`: SMTP credentials and server configuration are hard-coded in code. This is both a security issue and an operational risk.
 - `MainWindow.xaml.cs`: `AutoUpdateAsync()` swallows exceptions silently on startup, which makes update failures invisible.
 - `TaskSchedulerWindow.xaml.cs`: hourly repetition uses a one-day repetition duration, which may not match the intended forever-hourly behavior.

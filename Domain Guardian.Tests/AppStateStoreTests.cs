@@ -684,7 +684,7 @@ public class AppStateStoreTests : IDisposable
                 Passed = 20 - (i % 4),
                 Failed = i % 4,
                 Details = $"Run {i}: {20 - (i % 4)}/20 passed",
-                LogFilePath = $@"C:\ADCheckLogs\runs\2026-06-{(i + 1):D2}\run{i}.txt",
+                LogFilePath = $@"{Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "AdHealthMonitor", "Logs", "runs", $"2026-06-{(i + 1):D2}", $"run{i}.txt")}",
                 TestType = i % 3 == 0 ? "Scheduled" : "Manual"
             })
             .ToList();
@@ -1045,7 +1045,7 @@ public class AppStateStoreTests : IDisposable
             RunDate = DateTime.Now.AddDays(-i),
             Total = 20, Passed = 20 - (i % 5), Failed = i % 5,
             Details = $"Run {i}: detailed result text for performance testing",
-            LogFilePath = $@"C:\ADCheckLogs\runs\2026-{(i / 30 + 1):D2}-{(i % 30 + 1):D2}\run{i}.txt",
+            LogFilePath = $@"{Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "AdHealthMonitor", "Logs", "runs", $"2026-{(i / 30 + 1):D2}-{(i % 30 + 1):D2}", $"run{i}.txt")}",
             TestType = i % 3 == 0 ? "Scheduled" : "Manual"
         }).ToList();
 

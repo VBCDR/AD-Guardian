@@ -2,7 +2,7 @@
 
 Welcome to **AD Guardian** — a tool built to monitor and test Active Directory health in a smart, automated, and user-friendly way. It simplifies routine AD checks, schedules tests, and sends detailed email notifications so you can always stay on top of your environment.
 
-**Current Version: [v2.0.25](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.25)** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
+**Current Version: [v2.0.26](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.26)** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
 
 ## Features
 
@@ -31,6 +31,14 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
   A clean, animated WPF UI with sidebar navigation, lazy-loaded tab pages, and responsive layout.
 
 ## Changelog
+
+### v2.0.26
+- **Installer fix: universal locked-file rename handler** replaces the v2.0.25 clrjit.dll-only workaround. An older previously-working installer also produced `Access is denied` errors on some user machines — the root cause is environmental (Defender Controlled Folder Access, Smart App Control, antivirus file locks) and can affect ANY `*.dll`/`*.exe` in `{app}`, not just `clrjit.dll`. New behaviour:
+  - `PreHandleLockedFiles` in `[Code]` recursively scans `{app}\*\*` for every `*.dll`/`*.exe`, attempting `DeleteFile` on each. On error, the file is `RenameFile`'d to `<file>.deleteme` (Windows always allows rename of mmapped/locked files) and `MoveFileExW(..., MOVEFILE_DELAY_UNTIL_REBOOT)` queues it for removal at next boot via the existing `__cleanup_pending_reboot__` sentinel under `{app}\`.
+  - `SetupLogging=yes` enabled so the user can open `%TEMP%\Setup Log YYYY-MM-DD #NNN.txt` and grep `PreHandleLockedFiles` to see exactly which file was renamed (or which rename failed) — required to diagnose environmental locks the installer can't auto-resolve.
+  - All paths previously hardcoded to `C:\ADCheckLogs` moved to `{commonappdata}\AdHealthMonitor\Logs` (= `C:\ProgramData\AdHealthMonitor\Logs`) so the installer stops creating a system-root path that AV/Defender Anti-Ransomware routinely lock. Runtime constant `App.LogDirectoryPath` now resolves to the same `SpecialFolder.CommonApplicationData` path so install-at-boot and run-at-runtime produce identical log locations.
+- Backwards compatibility: pre-v2.0.26 log data in `C:\ADCheckLogs` is preserved on disk but no longer referenced. New runs write to `%ProgramData%\AdHealthMonitor\Logs`. Old log dirs can be deleted manually.
+- [Full release notes on GitHub →](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.26)
 
 ### v2.0.25
 - **Installer fix: `DeleteFile failed; code 5. Access is denied.`** on memory-mapped `clrjit.dll` during self-updates against a running install
@@ -96,7 +104,7 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 
 ### Installation
 
-1. **Download the installer** for [v2.0.25](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.25) (or grab the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest) for the most recent build)
+1. **Download the installer** for [v2.0.26](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.26) (or grab the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest) for the most recent build)
 
    — or —
 

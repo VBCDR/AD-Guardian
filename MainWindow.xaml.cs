@@ -79,7 +79,7 @@ public partial class MainWindow : Window, IDisposable
     private AdInventorySnapshot latestInventory = AdInventorySnapshot.Empty;
     private TelemetrySnapshot latestTelemetry = TelemetrySnapshot.Empty;
     private DashboardSnapshot? cachedDashboardSnapshot;
-    private const string LogDirectoryPath = App.LogDirectoryPath;
+    private static readonly string LogDirectoryPath = App.LogDirectoryPath;
     private const string RunLogsDirectoryName = App.RunLogsDirectoryName;
 
     private readonly List<ScheduledTask> scheduledTasks = new();

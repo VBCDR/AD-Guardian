@@ -250,9 +250,17 @@ public class UntestedMethodsTests : IDisposable
     [Fact]
     public void GetManagedRunDirectoryPath_PathInsideRunsDir_ReturnsParent()
     {
-        // The runs root is C:\ADCheckLogs\runs
-        string logPath = @"C:\ADCheckLogs\runs\2026-06-10\143045_Manual\test.log";
-        string expectedParent = @"C:\ADCheckLogs\runs\2026-06-10\143045_Manual";
+        // The runs root is the installer-created ProgramData\AdHealthMonitor\Logs\runs
+        // (== MainWindow.LogDirectoryPath + RunLogsDirectoryName). Resolved against
+        // SpecialFolder.CommonApplicationData so the test stays portable on hosts
+        // where folder-redirection policy remaps %ProgramData%.
+        string expectedRunsRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "AdHealthMonitor",
+            "Logs",
+            "runs");
+        string logPath = Path.Combine(expectedRunsRoot, "2026-06-10", "143045_Manual", "test.log");
+        string expectedParent = Path.Combine(expectedRunsRoot, "2026-06-10", "143045_Manual");
 
         string? result = InvokeGetManagedRunDirectoryPath(logPath);
 
@@ -274,16 +282,19 @@ public class UntestedMethodsTests : IDisposable
     [Fact]
     public void GetManagedRunDirectoryPath_PathAtRunsRoot_NotInsideSubdir_ReturnsNull()
     {
-        // A file directly in C:\ADCheckLogs\runs (not in a subdirectory)
-        // Parent directory is C:\ADCheckLogs, which does NOT start with C:\ADCheckLogs\runs
-        string logPath = @"C:\ADCheckLogs\runs\orphan.log";
+        // A file directly in ProgramData\AdHealthMonitor\Logs\runs (not in a subdirectory).
+        // Parent directory is the runs root itself, which DOES start with itself → returns parent.
+        string runsRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "AdHealthMonitor",
+            "Logs",
+            "runs");
+        string logPath = Path.Combine(runsRoot, "orphan.log");
 
         string? result = InvokeGetManagedRunDirectoryPath(logPath);
 
-        // The parent dir would be C:\ADCheckLogs\runs (the file is inside it)
-        // But the check is: normalizedParent.StartsWith(runsRoot + "\")
-        // C:\ADCheckLogs\runs\ starts with C:\ADCheckLogs\runs\ → true!
-        // So this SHOULD return the parent
+        // Parent of orphan.log IS the runs root. The check is
+        // normalizedParent.StartsWith(runsRoot + sep), so this returns the parent.
         Assert.NotNull(result);
     }
 
@@ -297,9 +308,8 @@ public class UntestedMethodsTests : IDisposable
             // Change to a temp directory for a predictable relative path
             Environment.CurrentDirectory = testDirectory;
 
-            // Create a fake runs structure inside testDirectory
-            // that mimics C:\ADCheckLogs\runs structure — but GetManagedRunDirectoryPath
-            // uses an absolute C:\ADCheckLogs root, so relative paths won't match
+            // Relative paths resolve under testDirectory — the actual runs root
+            // is on ProgramData\AdHealthMonitor\Logs\runs, so this never matches.
             string relativePath = Path.Combine("subdir", "test.log");
             string? result = InvokeGetManagedRunDirectoryPath(relativePath);
 
@@ -316,7 +326,16 @@ public class UntestedMethodsTests : IDisposable
     [Fact]
     public void GetManagedRunDirectoryPath_CaseInsensitiveMatch()
     {
-        string logPath = @"c:\adchecklogs\RUNS\2026-06-10\143045_Manual\test.log";
+        string runsRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "AdHealthMonitor",
+            "Logs",
+            "runs");
+        string logPath = Path.Combine(runsRoot, "2026-06-10", "143045_Manual", "test.log")
+            .Replace("ProgramData", "programdata", StringComparison.OrdinalIgnoreCase)
+            .Replace("AdHealthMonitor", "adhealthmonitor", StringComparison.OrdinalIgnoreCase)
+            .Replace("Logs", "logs", StringComparison.OrdinalIgnoreCase)
+            .Replace("runs", "RUNS", StringComparison.OrdinalIgnoreCase);
         string? result = InvokeGetManagedRunDirectoryPath(logPath);
 
         Assert.NotNull(result);
@@ -345,7 +364,12 @@ public class UntestedMethodsTests : IDisposable
     [Fact]
     public void IsManagedRunLogPath_PathInsideRuns_ReturnsTrue()
     {
-        string logPath = @"C:\ADCheckLogs\runs\2026-06-10\143045_Manual\test.log";
+        string runsRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "AdHealthMonitor",
+            "Logs",
+            "runs");
+        string logPath = Path.Combine(runsRoot, "2026-06-10", "143045_Manual", "test.log");
         Assert.True(InvokeIsManagedRunLogPath(logPath));
     }
 
