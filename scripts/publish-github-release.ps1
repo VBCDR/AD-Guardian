@@ -54,8 +54,8 @@ if (-not $Title) {
 $repo = "VBCDR/AD-Guardian"
 $releaseExists = $false
 try {
-    $null = & $gh release view $Tag --repo $repo --json tagName 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    $viewProc = Start-Process $gh -ArgumentList @('release', 'view', $Tag, '--repo', $repo, '--json', 'tagName') -NoNewWindow -Wait -PassThru
+    if ($viewProc.ExitCode -eq 0) {
         $releaseExists = $true
     }
 } catch {
@@ -93,9 +93,9 @@ if (-not $releaseExists) {
     if ($Draft) { $createArgs += "--draft" }
     if ($Latest) { $createArgs += "--latest" }
 
-    & $gh @createArgs
-    exit $LASTEXITCODE
+    $createProc = Start-Process $gh -ArgumentList $createArgs -NoNewWindow -Wait -PassThru
+    exit $createProc.ExitCode
 }
 
-& $gh release upload $Tag $uploadAssetPath --repo $repo --clobber
-exit $LASTEXITCODE
+$uploadProc = Start-Process $gh -ArgumentList @('release', 'upload', $Tag, $uploadAssetPath, '--repo', $repo, '--clobber') -NoNewWindow -Wait -PassThru
+exit $uploadProc.ExitCode
