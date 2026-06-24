@@ -260,10 +260,15 @@ if ([string]::IsNullOrWhiteSpace($status)) {
 
 if ($AutoPush -or (Confirm-Action "Push to remote?")) {
     Write-Status "Pushing to origin/master..."
-    & git -C $repoRoot push origin master 2>&1
+    # Start-Process -PassThru returns the raw OS exit, decoupling us from the
+    # $LASTEXITCODE pollution that the old `2>&1` merge caused in PS 5.1.
+    $pushProc = Start-Process git `
+        -ArgumentList @('-C', $repoRoot, 'push', 'origin', 'master') `
+        -NoNewWindow -Wait -PassThru
 
-    if ($LASTEXITCODE -ne 0) {
+    if ($pushProc.ExitCode -ne 0) {
         Write-Host "  ✗ Push failed — you may need to push manually." -ForegroundColor Red
+        exit 1
     } else {
         Write-Status "Pushed." "Green"
     }
@@ -272,10 +277,15 @@ if ($AutoPush -or (Confirm-Action "Push to remote?")) {
     if ($versionChanged) {
         Write-Status "Creating and pushing tag $releaseTag..."
         & git -C $repoRoot tag -a $releaseTag -m "Release $releaseTag" 2>&1
-        & git -C $repoRoot push origin $releaseTag 2>&1
+        $tagProc = Start-Process git `
+            -ArgumentList @('-C', $repoRoot, 'push', 'origin', $releaseTag) `
+            -NoNewWindow -Wait -PassThru
 
-        if ($LASTEXITCODE -eq 0) {
+        if ($tagProc.ExitCode -eq 0) {
             Write-Status "Tag $releaseTag pushed." "Green"
+        } else {
+            Write-Host "  ✗ Tag push failed." -ForegroundColor Red
+            exit 1
         }
     }
 } else {
