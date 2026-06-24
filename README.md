@@ -2,7 +2,7 @@
 
 Welcome to **AD Guardian** — a tool built to monitor and test Active Directory health in a smart, automated, and user-friendly way. It simplifies routine AD checks, schedules tests, and sends detailed email notifications so you can always stay on top of your environment.
 
-**Current Version: [v2.0.24](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.24)** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
+**Current Version: [v2.0.25](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.25)** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
 
 ## Features
 
@@ -31,6 +31,16 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
   A clean, animated WPF UI with sidebar navigation, lazy-loaded tab pages, and responsive layout.
 
 ## Changelog
+
+### v2.0.25
+- **Installer fix: `DeleteFile failed; code 5. Access is denied.`** on memory-mapped `clrjit.dll` during self-updates against a running install
+  - `restartreplace` flag was insufficient — Inno Setup only silently queues for `ERROR_SHARING_VIOLATION` (code 32), not for `ERROR_ACCESS_DENIED` (code 5) which memory-mapped DLLs return
+  - New Pascal Script `PreHandleLockedFiles` (in `[Code]` section) runs at the top of `CurStepChanged(ssInstall)`, *after* Restart Manager attempts to close AD Guardian but *before* Inno's `[Files]` copy: tries `DeleteFile`, falls back to `RenameFile(clrjit.dll → clrjit.dll.deleteme)` (Windows allows rename of mmapped files), then `MoveFileExW(.deleteme, __cleanup_pending_reboot__\.deleteme, MOVEFILE_DELAY_UNTIL_REBOOT)` to schedule the rename at next reboot
+  - Non-empty destination path is used deliberately — Inno's Pascal marshalling of empty-string `String` to stdcall passes a `PWideChar` to `L""`, not a NULL pointer, so relying on the documented NULL-destination delete behavior would risk silent failure
+  - Sets `LockedFilesNeedReboot := True` on rename success so Inno prompts for a reboot; surfaces a `MsgBox` with actionable guidance if even the rename fails
+- **CI: branch-protection required status check retargeted** at the deterministic `build-and-test` job (was pointing at `Required perf tests (LinqOptimizationBenchmarks + PerformanceTests)` which wasn't actually emitted on every push, producing a "Bypassed rule violations" warning every commit)
+- Subscribers receive a normal GitHub auto-update notification from the new `v2.0.25` tag — canonical release flow when a real bug fix lands in a shipped release
+- [Full release notes on GitHub →](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.25)
 
 ### v2.0.24
 - "View Changelog on GitHub" link button replaces the inline markdown toggle in the Update window
@@ -86,7 +96,7 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 
 ### Installation
 
-1. **Download the installer** for [v2.0.24](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.24) (or grab the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest) for the most recent build)
+1. **Download the installer** for [v2.0.25](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.25) (or grab the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest) for the most recent build)
 
    — or —
 
@@ -99,6 +109,5 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 ## Continuous Integration
 
 Builds and tests run on every push to `master` and every pull request via
-GitHub Actions (`.github/workflows/build-and-test.yml`). The
-`Required perf tests (LinqOptimizationBenchmarks + PerformanceTests)` job
+GitHub Actions (`.github/workflows/build-and-test.yml`).The `build-and-test` job
 is the required status check on `master`.
