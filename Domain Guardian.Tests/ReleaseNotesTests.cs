@@ -134,6 +134,15 @@ public class ReleaseNotesTests
     {
         const string script = """
             $ErrorActionPreference = 'Stop'
+            # FIX: force the child pwsh.exe to write UTF-8 to stdout regardless
+            # of the parent's inherited console codepage. Without this, an
+            # em-dash (—, U+2014) gets best-fit-fallback to a 1-byte ASCII
+            # hyphen in the JSON body and Assert.Contains for the highlight
+            # header line fails on the plus-N-more branch. This is the
+            # minimum-change root cause; see the commit message for the full
+            # diagnostic trail.
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+            $OutputEncoding = [System.Text.Encoding]::UTF8
             Import-Module '##MODULEPATH##' -Force
             $json = $env:RELEASENOTES_FORCEDCOMMITS
             $p = @{
