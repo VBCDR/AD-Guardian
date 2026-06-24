@@ -173,6 +173,13 @@ public partial class MainWindow
         SetRunInProgress(true);
         isLogContentReady = false;
         allResults.Clear();
+        allFindings.Clear();
+        // Synchronise the bound collections immediately so the health/findings
+        // DataGrids visibly clear out before the new test run starts, rather
+        // than continuing to display the previous run's results until the loop
+        // finishes and SyncResultItems re-runs at the end.
+        SyncResultItems();
+        SyncFindingItems();
         List<string> logFilePaths = new();
         RunLogSession runSession = CreateRunLogSession(runStartedAt, "Manual");
         // Manual split+trim+filter: avoids LINQ Select/Where/ToArray allocations
@@ -374,7 +381,7 @@ public partial class MainWindow
             });
             _ = CleanupLogFilesAsync();
             Debug.WriteLine($"Manual run completed in {runStopwatch.ElapsedMilliseconds}ms.");
-            new SuccessNotification("Test Complete", $"Tests completed. {passed} passed, {failed} failed out of {total} total.").ShowDialog();
+            new SuccessNotification("Test Complete", $"Tests completed. {passed} passed, {failed} failed out of {total} total.", autoDismissSeconds: 6) { Owner = this }.ShowDialog();
         }
         finally
         {
@@ -1068,7 +1075,7 @@ public partial class MainWindow
             }
             if (selected.Count == 0)
             {
-                new SuccessNotification("No Selection", "No results selected. Check the checkbox(es) to select result(s) to view.", isError: true).ShowDialog();
+                new SuccessNotification("No Selection", "No results selected. Check the checkbox(es) to select result(s) to view.", isError: true) { Owner = this }.ShowDialog();
                 return;
             }
 

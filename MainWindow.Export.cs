@@ -40,7 +40,7 @@ public partial class MainWindow
     {
         if (allResults.Count == 0)
         {
-            new SuccessNotification("No Results", "No test results available to export.", isError: true).ShowDialog();
+            new SuccessNotification("No Results", "No test results available to export.", isError: true) { Owner = this }.ShowDialog();
             return;
         }
 
@@ -65,7 +65,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            new SuccessNotification("Export Failed", $"Failed to export:\n{ex.Message}", isError: true).ShowDialog();
+            new SuccessNotification("Export Failed", $"Failed to export:\n{ex.Message}", isError: true) { Owner = this }.ShowDialog();
         }
     }
 
@@ -73,7 +73,7 @@ public partial class MainWindow
     {
         if (allResults.Count == 0)
         {
-            new SuccessNotification("No Results", "No test results available. Run tests first.", isError: true).ShowDialog();
+            new SuccessNotification("No Results", "No test results available. Run tests first.", isError: true) { Owner = this }.ShowDialog();
             return;
         }
 
@@ -132,12 +132,11 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            new SuccessNotification("Summary Failed", $"Failed to build executive summary:\n{ex.Message}", isError: true).ShowDialog();
+            new SuccessNotification("Summary Failed", $"Failed to build executive summary:\n{ex.Message}", isError: true) { Owner = this }.ShowDialog();
             return;
         }
 
-        try { Process.Start(new ProcessStartInfo(sfd.FileName) { UseShellExecute = true }); }
-        catch { new SuccessNotification("Summary Saved", $"Summary saved to:\n{sfd.FileName}").ShowDialog(); }
+        try { Process.Start(new ProcessStartInfo(sfd.FileName) { UseShellExecute = true }); }            catch { new SuccessNotification("Summary Saved", $"Summary saved to:\n{sfd.FileName}") { Owner = this }.ShowDialog(); }
     }
 
     private static void ExportResultsToFile(string filePath, IReadOnlyCollection<TestResult> results)

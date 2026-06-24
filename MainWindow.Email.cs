@@ -41,7 +41,7 @@ public partial class MainWindow
         string recipient = SettingsEmailTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(recipient))
         {
-            new SuccessNotification("Email Required", "Please enter a recipient email address first.", isError: true).ShowDialog();
+            new SuccessNotification("Email Required", "Please enter a recipient email address first.", isError: true) { Owner = this }.ShowDialog();
             return;
         }
 
@@ -55,11 +55,11 @@ public partial class MainWindow
                 "Connecting to SMTP and sending the verification email.",
                 () => SendConfiguredTestEmailAsync(recipient)).ConfigureAwait(true);
 
-            new SuccessNotification("Email Sent", "Test email sent successfully!").ShowDialog();
+            new SuccessNotification("Email Sent", "Test email sent successfully!") { Owner = this }.ShowDialog();
         }
         catch (Exception ex)
         {
-            new SuccessNotification("Email Failed", $"Failed to send test email:\n{ex.Message}", isError: true).ShowDialog();
+            new SuccessNotification("Email Failed", $"Failed to send test email:\n{ex.Message}", isError: true) { Owner = this }.ShowDialog();
         }
         finally
         {

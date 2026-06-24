@@ -323,12 +323,21 @@ public partial class MainWindow : Window, IDisposable
         RunProgressTitleText.Text = title;
         RunProgressDetailText.Text = detail;
         int safeTotalSteps = totalSteps <= 0 ? 1 : totalSteps;
-        double percentage = Math.Clamp((double)completedSteps / safeTotalSteps, 0d, 1d) * 100d;
+        int clampedSteps = Math.Clamp(completedSteps, 0, safeTotalSteps);
+        double percentage = (double)clampedSteps / safeTotalSteps * 100d;
         RunProgressPercentText.Text = $"{percentage:0}%";
-        RunProgressCountText.Text = $"{Math.Min(completedSteps, safeTotalSteps)} / {safeTotalSteps} steps completed";
-        TestProgressBar.Maximum = 100;
-        TestProgressBar.IsIndeterminate = completedSteps <= 0;
-        TestProgressBar.Value = percentage;
+        RunProgressCountText.Text = $"{clampedSteps} / {safeTotalSteps} steps completed";
+        // Use a linear scale (Maximum = totalSteps, Value = completedSteps) instead
+        // of converting to a 0-100 percentage, and always render in determinate mode.
+        // Toggling IsIndeterminate between runs caused WPF to briefly render the
+        // indicator at full width before snapping back to the new Value, which the
+        // user perceived as the bar "shooting to 100% and falling back". Cancelling
+        // any pending value animation prevents the previous run's value blending
+        // into the new run's first frame.
+        TestProgressBar.Maximum = safeTotalSteps;
+        TestProgressBar.IsIndeterminate = false;
+        TestProgressBar.BeginAnimation(ProgressBar.ValueProperty, null);
+        TestProgressBar.Value = clampedSteps;
         lastProgressUiUpdateUtc = now;
         lastProgressCompletedSteps = completedSteps;
         lastProgressTitle = title;
@@ -620,10 +629,14 @@ public partial class MainWindow : Window, IDisposable
     {
         ReplaceCollection(resultItems, allResults);
         ReplaceCollection(logResultItems, allResults);
-        if (MainTabControl.SelectedIndex == 5)
-        {
-            RefreshLogsWorkspace();
-        }
+        // Always refresh the logs workspace filter options so that the DC / Result /
+        // Section drop-downs reflect whatever controllers are present in allResults,
+        // even when the user is on the Health tab at the time of the run. Previously
+        // this was gated on MainTabControl.SelectedIndex == 5 which left the
+        // LogsDcFilter populated only by its initial "All domain controllers"
+        // entry, producing a single-item dropdown the next time the user visited
+        // the logs page after a multi-DC run.
+        RefreshLogsWorkspace();
         UpdateActionButtonStates();
     }
 

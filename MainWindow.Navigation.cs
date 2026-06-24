@@ -171,11 +171,11 @@ public partial class MainWindow
         {
             SaveSettings();
             RefreshDashboard();
-            new SuccessNotification("Settings Saved", "Your settings have been saved successfully.").ShowDialog();
+            new SuccessNotification("Settings Saved", "Your settings have been saved successfully.") { Owner = this }.ShowDialog();
         }
         catch (Exception ex)
         {
-            new SuccessNotification("Settings Error", $"Failed to save settings:\n{ex.Message}", isError: true).ShowDialog();
+            new SuccessNotification("Settings Error", $"Failed to save settings:\n{ex.Message}", isError: true) { Owner = this }.ShowDialog();
         }
     }
 
