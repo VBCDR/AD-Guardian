@@ -26,4 +26,8 @@
     <ProjectReference Include="..\Domain Guardian.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\scripts\ReleaseNotes.psm1" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

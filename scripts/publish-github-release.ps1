@@ -7,7 +7,9 @@ param(
     [string]$Notes = "",
     [string]$InstallerPath,
     [switch]$Draft,
-    [switch]$Latest
+    [switch]$Latest,
+    [ValidateRange(1, 50)]
+    [int]$MaxBulletCount = 8
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,12 +62,33 @@ try {
     $releaseExists = $false
 }
 
+# ── Natural-tone notes generator ──────────────────────────────────────────
+# Imported from scripts/ReleaseNotes.psm1 so the same generator can be unit
+# tested by the xUnit suite (Domain Guardian.Tests) via a subprocess pwsh
+# harness. See ReleaseNotes.psm1 for the full generator logic and the
+# optional -ForcedPreviousTag / -ForcedCommits / -ForceNoPreviousTag
+# parameters used by tests.
+Import-Module -Name (Join-Path $PSScriptRoot 'ReleaseNotes.psm1') -Force
+
+if (-not $Notes -and -not $releaseExists) {
+    $generatedNotes = Build-NaturalReleaseNotes -CurrentTag $Tag -MaxBullets $MaxBulletCount
+    if ($generatedNotes) {
+        $Notes = $generatedNotes
+        Write-Host "  → Generated natural-tone release notes from commit log:" -ForegroundColor Gray
+        foreach ($noteLine in ($Notes -split "`n")) {
+            Write-Host "    $noteLine" -ForegroundColor DarkGray
+        }
+    } else {
+        Write-Host "  → Could not read commit history; falling back to --generate-notes." -ForegroundColor Yellow
+    }
+}
+
 if (-not $releaseExists) {
     $createArgs = @("release", "create", $Tag, $uploadAssetPath, "--repo", $repo, "--title", $Title)
     if ($Notes) {
         $createArgs += @("--notes", $Notes)
     } else {
-        $createArgs += @("--generate-notes")
+        $createArgs += "--generate-notes"
     }
     if ($Draft) { $createArgs += "--draft" }
     if ($Latest) { $createArgs += "--latest" }
