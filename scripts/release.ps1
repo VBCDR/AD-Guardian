@@ -306,6 +306,31 @@ if ($AutoPush -or (Confirm-Action "Push to remote?")) {
 
         if ($tagProc.ExitCode -eq 0) {
             Write-Status "Tag $releaseTag pushed." "Green"
+
+            # Wait for the tag to propagate to the remote (GitHub replication
+            # can lag behind the push by several seconds). Poll git ls-remote
+            # every 2 seconds for up to 30 seconds. If the tag still isn't
+            # visible after the timeout, warn but don't block — Step 6 has its
+            # own auto-retry that can handle a late-appearing tag.
+            Write-Status "Waiting for tag $releaseTag to propagate to remote..."
+            $tagMaxWait = 30
+            $tagWaited = 0
+            $tagPropagated = $false
+            do {
+                Start-Sleep -Seconds 2
+                $tagWaited += 2
+                $tagRemoteCheck = (& git -C $repoRoot ls-remote --tags origin ('refs/tags/' + $releaseTag) 2>$null | Select-Object -First 1)
+                $tagPropagated = -not [string]::IsNullOrWhiteSpace($tagRemoteCheck)
+                if (-not $tagPropagated -and $tagWaited -lt $tagMaxWait) {
+                    Write-Status "  Tag not yet visible on remote (${tagWaited}s elapsed) — retrying..." "Yellow"
+                }
+            } while (-not $tagPropagated -and $tagWaited -lt $tagMaxWait)
+
+            if ($tagPropagated) {
+                Write-Status "Tag $releaseTag confirmed on remote after ${tagWaited}s." "Green"
+            } else {
+                Write-Status "Tag $releaseTag not visible on remote after ${tagMaxWait}s — continuing anyway (Step 6 will auto-retry)." "Yellow"
+            }
         } else {
             Write-Host "  ✗ Tag push failed." -ForegroundColor Red
             exit 1
@@ -350,14 +375,42 @@ if ($installerExePath -and (Test-Path $installerExePath)) {
         if ($installerExePath) {
             $publishArgs += @('-InstallerPath', $installerExePath)
         }
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass @publishArgs
 
-        if ($LASTEXITCODE -eq 0) {
+        # Auto-retry: tag propagation to GitHub can lag behind the push by
+        # several seconds even after Step 5's ls-remote check. Retry up to 3
+        # times with a 5-second pause between attempts so the tag has time to
+        # appear in GitHub's release-indexing layer.
+        $releaseMaxRetries = 3
+        $releaseRetryDelay = 5
+        $releaseAttempt = 0
+        $releaseSucceeded = $false
+        $lastReleaseError = $null
+        do {
+            $releaseAttempt++
+            if ($releaseAttempt -gt 1) {
+                Write-Status "Retry attempt $releaseAttempt/$releaseMaxRetries after ${releaseRetryDelay}s delay..." "Yellow"
+                Start-Sleep -Seconds $releaseRetryDelay
+            }
+            $releaseOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass @publishArgs 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $releaseSucceeded = $true
+                break
+            } else {
+                Write-Status "GitHub release failed (attempt $releaseAttempt/$releaseMaxRetries)." "Yellow"
+                $lastReleaseError = $releaseOutput
+            }
+        } while ($releaseAttempt -lt $releaseMaxRetries)
+
+        if ($releaseSucceeded) {
             Write-Status "GitHub release published!" "Green"
             Write-Host ""
             Write-Host "  View: https://github.com/VBCDR/AD-Guardian/releases/tag/$releaseTag" -ForegroundColor Cyan
         } else {
-            Write-Host "  ✗ GitHub release publish failed." -ForegroundColor Red
+            Write-Host "  ✗ GitHub release publish failed after $releaseMaxRetries attempts." -ForegroundColor Red
+            if ($lastReleaseError) {
+                Write-Host "  Last error output:" -ForegroundColor Red
+                $lastReleaseError | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkRed }
+            }
         }
     } else {
         Write-Status "GitHub release skipped." "Yellow"
