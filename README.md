@@ -38,7 +38,7 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 - New `scripts/cleanup-adchecklogs.ps1` — reusable parameterised PowerShell helper (`-Path`, `-Force`, `-DryRun`, `-Json`) that performs the same legacy-dir cleanup identically across dev machines, test boxes, and CI artifacts. Includes NTFS junction/symlink detection (refuses unless `-Force`) and CI-friendly exit codes: `0` = ok, `1` = refused/Remove-Item threw, `2` = partial (Defender mid-scan). `-DryRun -Json` emits a single-line JSON payload suitable for log capture.
 - Backwards-compatible: a failed `MigrationMarker.json` write during install is non-fatal — the install still completes, only the toast is suppressed.
 - [Full release notes on GitHub →](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.27)
-- 637 total tests, all passing at release time
+- 704 total tests, all passing at release time
 
 ### v2.0.26
 - **Installer fix: universal locked-file rename handler** replaces the v2.0.25 clrjit.dll-only workaround. An older previously-working installer also produced `Access is denied` errors on some user machines — the root cause is environmental (Defender Controlled Folder Access, Smart App Control, antivirus file locks) and can affect ANY `*.dll`/`*.exe` in `{app}`, not just `clrjit.dll`. New behaviour:

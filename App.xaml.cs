@@ -89,12 +89,30 @@ namespace AdHealthMonitor
                     return;
                 }
 
+                // Fallback: if the marker carried BytesMigrated == 0 because it
+                // was written by an installer version that pre-dates the byte-
+                // summation feature in MigrateLegacyLogsTo, sum the size on disk
+                // lazily here. Caps inside ComputeBytesMigratedFromDisk keep
+                // this bounded (500 ms wall-clock / 5000 files) so we never
+                // stall first launch on a sluggish redirected volume.
+                //
+                // Safe to mutate marker.BytesMigrated in-place below: the file
+                // has already been deleted from disk by TryReadAndDelete above,
+                // so this in-memory enrichment has no persistent side effect.
+                // The marker object is local to this Loaded callback so no other
+                // code touches it after we leave.
+                if (marker.BytesMigrated == 0 && !string.IsNullOrEmpty(marker.DestinationRoot))
+                {
+                    marker.BytesMigrated = MigrationMarker.ComputeBytesMigratedFromDisk(marker.DestinationRoot);
+                }
+
                 bool isError = string.Equals(marker.CleanupStatus, "failed", StringComparison.OrdinalIgnoreCase);
                 NotificationService.Show(
                     ownerWindow,
                     marker.ToToastTitle(),
                     marker.ToToastBody(),
-                    isError);
+                    isError,
+                    marker.AutoDismissSeconds);
             }
             catch
             {
