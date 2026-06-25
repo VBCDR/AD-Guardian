@@ -52,7 +52,53 @@ namespace AdHealthMonitor
 
             if (!isScheduledLaunch)
             {
+                // Subscribe BEFORE Show() so the Loaded handler is guaranteed
+                // to fire on first paint. WPF semantics: Loaded fires once per
+                // window instance after the visual tree is built and the
+                // window is rendered, so this is single-shot -- re-opening the
+                // window later will not re-fire the toast because the marker
+                // file is deleted on first consumption.
+                mainWindow.Loaded += OnMainWindowLoaded;
                 mainWindow.Show();
+            }
+        }
+
+        // Subscription target for MainWindow.Loaded. Drains the installer-
+        // written MigrationMarker.json (see installer/AD Guardian Installer.iss::
+        // CleanupLegacyAdCheckLogs) and surfaces a one-shot Migration Complete
+        // (or Migration Cleanup Warning for failed cleanups) toast via the
+        // existing modal SuccessNotification pattern. The marker is consumed
+        // by MigrationMarker.TryReadAndDelete so the toast never reappears.
+        //
+        // Designed to NEVER crash startup -- any exception from the migration
+        // pipeline is swallowed. The user gets to the main window either way.
+        private static void OnMainWindowLoaded(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // `sender` is the MainWindow that fired Loaded (we subscribed before Show()).
+                // Use it directly instead of Application.Current.MainWindow -- the static
+                // base-class property `MainWindow` is shadowed by a same-named member in
+                // some WPF versions, and `sender` is guaranteed-correct inside an event
+                // handler without any base-class lookup ambiguity.
+                Window? ownerWindow = sender as Window;
+
+                MigrationMarker? marker = MigrationMarker.TryReadAndDelete();
+                if (marker == null || !marker.IsSignificantForToast || ownerWindow == null)
+                {
+                    return;
+                }
+
+                bool isError = string.Equals(marker.CleanupStatus, "failed", StringComparison.OrdinalIgnoreCase);
+                NotificationService.Show(
+                    ownerWindow,
+                    marker.ToToastTitle(),
+                    marker.ToToastBody(),
+                    isError);
+            }
+            catch
+            {
+                // The migration toast must NEVER crash first launch.
             }
         }
 

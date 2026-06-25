@@ -273,8 +273,31 @@ if ($AutoPush -or (Confirm-Action "Push to remote?")) {
         Write-Status "Pushed." "Green"
     }
 
-    # Also push the tag if version changed
-    if ($versionChanged) {
+    # Ensure $releaseTag exists on origin regardless of $versionChanged.
+    # Covers both: (a) VersionChoice 2/3 (new version) — first-time tag
+    # creation; (b) VersionChoice 1 (rebuild the same version) — self-heals
+    # the case where the previous run was -VersionChoice 1 and the tag step
+    # was skipped, leaving origin without a tag for the rebuilt release.
+    # Always idempotent: skip silently when the tag exists anywhere.
+    #
+    # Existence detection uses inline git + stdout. The subsequent push still
+    # uses Start-Process and reads .ExitCode directly from the returned
+    # process object — independent of any $LASTEXITCODE that the inline
+    # git invocations above may have set (PS 5.1 clobbers $LASTEXITCODE
+    # after every external command, so inline-git + Start-Process hybrid
+    # is the established pattern in this script).
+    #
+    # The remote probe passes the FULL refs/tags/$releaseTag ref so git
+    # ls-remote emits a line ONLY when the exact peeled/lightweight ref
+    # resolves. Avoids substring-match false positives on tags like
+    # v2.0.26-beta or refs/tags/v2.0.26^0.
+    $tagLocalLine = (& git -C $repoRoot tag --list $releaseTag 2>$null | Select-Object -First 1)
+    $tagLocalExists = -not [string]::IsNullOrWhiteSpace($tagLocalLine)
+    $tagRemoteLine = (& git -C $repoRoot ls-remote --tags origin ('refs/tags/' + $releaseTag) 2>$null | Select-Object -First 1)
+    $tagRemoteExists = -not [string]::IsNullOrWhiteSpace($tagRemoteLine)
+    if ($tagLocalExists -or $tagRemoteExists) {
+        Write-Status "Tag $releaseTag already exists (local=$tagLocalExists, remote=$tagRemoteExists) — skipping creation." "Yellow"
+    } else {
         Write-Status "Creating and pushing tag $releaseTag..."
         & git -C $repoRoot tag -a $releaseTag -m "Release $releaseTag" 2>&1
         $tagProc = Start-Process git `

@@ -1,7 +1,7 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-
 using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -236,35 +236,135 @@ internal static class UpdateManager
         public long? TotalBytes { get; init; }
     }
 
+    // Maximum attempts when opening %TEMP%\ADGuardianUpdate for write.
+    // 5 attempts with 250 / 500 / 750 / 1000 ms linear backoff across the 4
+    // inter-attempt delays sums to exactly 2500ms = 2.5s of waits, comfortably
+    // covering Windows Defender Controlled Folder Access / Smart App Control
+    // scan locks that typically resolve in <1s after a write probe.
+    internal const int MaxDownloadAttempts = 5;
+    internal const int InitialDownloadBackoffMs = 250;
+
     private static async Task<string> DownloadInstallerAsync(GitHubAsset asset, Action<DownloadProgress> progressCallback)
     {
-        string tempDir = Path.Combine(Path.GetTempPath(), "ADGuardianUpdate");
-        Directory.CreateDirectory(tempDir);
-        string tempFile = Path.Combine(tempDir, asset.name);
-
         using HttpClient client = new();
         client.DefaultRequestHeaders.UserAgent.ParseAdd("ADGuardianApp");
         using HttpResponseMessage response = await client.GetAsync(asset.browser_download_url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         long? totalBytes = response.Content.Headers.ContentLength;
         await using Stream sourceStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        await using FileStream fs = new(tempFile, FileMode.Create, FileAccess.Write, FileShare.None);
 
-        byte[] buffer = new byte[81920];
-        long totalRead = 0;
-        int bytesRead;
-        while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+        // Open the local target with retry-on-EACCES so a transient Defender
+        // scan holding %TEMP%\ADGuardianUpdate does not abort the entire
+        // update flow. The helper raises a clear IOException after retries
+        // are exhausted, with the manual download URL inline so the user can
+        // recover without digging through docs.
+        FileStream fs = await OpenDownloadTargetStreamAsync(asset).ConfigureAwait(false);
+        bool success = false;
+        try
         {
-            await fs.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
-            totalRead += bytesRead;
-            progressCallback(new DownloadProgress
+            byte[] buffer = new byte[81920];
+            long totalRead = 0;
+            int bytesRead;
+            while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
             {
-                BytesReceived = totalRead,
-                TotalBytes = totalBytes
-            });
+                await fs.WriteAsync(buffer, 0, bytesRead).ConfigureAwait(false);
+                totalRead += bytesRead;
+                progressCallback(new DownloadProgress
+                {
+                    BytesReceived = totalRead,
+                    TotalBytes = totalBytes
+                });
+            }
+            success = true;
+        }
+        finally
+        {
+            // Always close the FileStream before any Delete attempt -- otherwise
+            // File.Delete throws a sharing-violation IOException that masks the
+            // original error. On success success==true and we leave the file in
+            // place for the SHA-256 verification step that follows.
+            await fs.DisposeAsync().ConfigureAwait(false);
+            if (!success)
+            {
+                try { File.Delete(fs.Name); } catch { /* best-effort cleanup */ }
+            }
         }
 
-        return tempFile;
+        return fs.Name;
+    }
+
+    // Opens (or fails through to a clear diagnostic exception after MaxDownloadAttempts
+    // retries) a writable FileStream on the update target. The factory + delay
+    // delegates are bitten-by-tests seams -- production passes the defaults.
+    internal static async Task<FileStream> OpenDownloadTargetStreamAsync(
+        GitHubAsset asset,
+        Func<string, FileStream>? streamFactory = null,
+        Func<int, Task>? delay = null,
+        string? overrideTempRoot = null)
+    {
+        Func<string, FileStream> factory = streamFactory ?? DefaultDownloadStreamFactory;
+        Func<int, Task> wait = delay ?? DefaultDownloadDelay;
+        string root = overrideTempRoot ?? Path.GetTempPath();
+        string tempFile = Path.Combine(root, "ADGuardianUpdate", asset.name);
+
+        Exception? lastException = null;
+        for (int attempt = 1; attempt <= MaxDownloadAttempts; attempt++)
+        {
+            try
+            {
+                string? dir = Path.GetDirectoryName(tempFile);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                return factory(tempFile);
+            }
+            catch (Exception ex) when (IsEaccesLikeException(ex))
+            {
+                lastException = ex;
+                if (attempt >= MaxDownloadAttempts) break;
+                await wait(InitialDownloadBackoffMs * attempt).ConfigureAwait(false);
+            }
+        }
+
+        throw new IOException(
+            $"Could not open update download target after {MaxDownloadAttempts} attempts at '{tempFile}'. " +
+            "Likely cause: Windows Defender Controlled Folder Access, Smart App Control, or third-party antivirus is denying writes to the update cache. " +
+            $"As a workaround, download the installer manually from {asset.browser_download_url} or visit https://github.com/VBCDR/AD-Guardian/releases/latest.",
+            lastException);
+    }
+
+    private static FileStream DefaultDownloadStreamFactory(string path) =>
+        new(path, FileMode.Create, FileAccess.Write, FileShare.None);
+
+    private static Task DefaultDownloadDelay(int milliseconds) => Task.Delay(milliseconds);
+
+    // Classifies the .NET exception types that surface ERROR_ACCESS_DENIED /
+    // ERROR_SHARING_VIOLATION / ERROR_LOCK_VIOLATION (the three access-denied
+    // variants Defender / Smart App Control commonly raise in-process when
+    // scanning a path). HResult values:
+    //   0x80070005 (-2147024894) -- ERROR_ACCESS_DENIED (5)
+    //   0x80070020 (-2147024608) -- ERROR_SHARING_VIOLATION (32)
+    //   0x80070021 (-2147024607) -- ERROR_LOCK_VIOLATION (33)
+    // NativeErrorCode values:
+    //   5, 32, 33 -- the same three errno values via Win32Exception inner.
+    internal static bool IsEaccesLikeException(Exception ex)
+    {
+        if (ex is UnauthorizedAccessException) return true;
+        if (ex is IOException ioEx)
+        {
+            const int EAccessDenied = unchecked((int)0x80070005);
+            const int ESharingViolation = unchecked((int)0x80070020);
+            const int ELockViolation = unchecked((int)0x80070021);
+            int hr = ioEx.HResult;
+            if (hr == EAccessDenied || hr == ESharingViolation || hr == ELockViolation) return true;
+            if (ioEx.InnerException is Win32Exception w32 &&
+                (w32.NativeErrorCode == 5 || w32.NativeErrorCode == 32 || w32.NativeErrorCode == 33))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // SHA-256 of the downloaded file in lower-case hex (64 chars).

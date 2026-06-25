@@ -2,7 +2,7 @@
 
 Welcome to **AD Guardian** — a tool built to monitor and test Active Directory health in a smart, automated, and user-friendly way. It simplifies routine AD checks, schedules tests, and sends detailed email notifications so you can always stay on top of your environment.
 
-**Current Version: [v2.0.26](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.26)** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
+**Current Version: [v2.0.27](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.27)** | [Latest Release](https://github.com/VBCDR/AD-Guardian/releases/latest)
 
 ## Features
 
@@ -31,6 +31,14 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
   A clean, animated WPF UI with sidebar navigation, lazy-loaded tab pages, and responsive layout.
 
 ## Changelog
+
+### v2.0.27
+- **Installer auto-cleanup of pre-v2.0.26 `C:\ADCheckLogs`** during `CurStepChanged(ssPostInstall)` — replaces the v2.0.26 "preserved for forensics" behaviour. When legacy data is detected, the installer removes the legacy dir tree and writes a `MigrationMarker.json` under `%ProgramData%\AdHealthMonitor\` so the app can surface the migration on first launch. Tremoved-branch state (entries count) is preserved in the marker so the user sees exactly what was cleared. Failures surface as a `Migration Cleanup Warning` toast with the underlying diagnostic reason.
+- **First-launch "Migration Complete" toast** — `App.OnStartup` reads + consumes the installer's marker after `MainWindow.Loaded` fires and displays a modal toast summarising the entries removed. The marker is deleted after consumption so the toast never reappears. Clean installs on a brand-new machine (no legacy dir) deliberately do NOT produce a toast — the absent branch is silent because there's nothing to migrate.
+- New `scripts/cleanup-adchecklogs.ps1` — reusable parameterised PowerShell helper (`-Path`, `-Force`, `-DryRun`, `-Json`) that performs the same legacy-dir cleanup identically across dev machines, test boxes, and CI artifacts. Includes NTFS junction/symlink detection (refuses unless `-Force`) and CI-friendly exit codes: `0` = ok, `1` = refused/Remove-Item threw, `2` = partial (Defender mid-scan). `-DryRun -Json` emits a single-line JSON payload suitable for log capture.
+- Backwards-compatible: a failed `MigrationMarker.json` write during install is non-fatal — the install still completes, only the toast is suppressed.
+- [Full release notes on GitHub →](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.27)
+- 637 total tests, all passing at release time
 
 ### v2.0.26
 - **Installer fix: universal locked-file rename handler** replaces the v2.0.25 clrjit.dll-only workaround. An older previously-working installer also produced `Access is denied` errors on some user machines — the root cause is environmental (Defender Controlled Folder Access, Smart App Control, antivirus file locks) and can affect ANY `*.dll`/`*.exe` in `{app}`, not just `clrjit.dll`. New behaviour:
@@ -104,7 +112,7 @@ Welcome to **AD Guardian** — a tool built to monitor and test Active Directory
 
 ### Installation
 
-1. **Download the installer** for [v2.0.26](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.26) (or grab the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest) for the most recent build)
+1. **Download the installer** for [v2.0.27](https://github.com/VBCDR/AD-Guardian/releases/tag/v2.0.27) (or grab the [latest release](https://github.com/VBCDR/AD-Guardian/releases/latest) for the most recent build)
 
    — or —
 

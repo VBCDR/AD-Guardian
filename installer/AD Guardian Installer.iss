@@ -1,4 +1,4 @@
-#define MyAppName "AD Guardian"
+﻿#define MyAppName "AD Guardian"
 #define MyAppExeName "Domain Guardian.exe"
 #define MyAppPublisher "AD Guardian"
 #define MyAppURL "https://github.com/VBCDR/AD-Guardian"
@@ -91,168 +91,23 @@ var
   RepairRadio: TNewRadioButton;
   UninstallRadio: TNewRadioButton;
   ExistingInstallCaption: TNewStaticText;
-  LockedFilesNeedReboot: Boolean;
 
-const
-  MOVEFILE_DELAY_UNTIL_REBOOT = $0004;
-  CleanupPendingRebootDir = '__cleanup_pending_reboot__';
-  // Subdirectories under {app} that should not be recursively scanned for
-  // locked files: the cleanup_pending_reboot sink is created on demand by
-  // QueueLockedFileForRebootRemoval and would otherwise be scanned in
-  // recursively (harmless but wasteful).
-  SkipDirsForLockScan = '__cleanup_pending_reboot__';
-  // Maximum number of directory LEVELS scanned by ScanDirectoryForLockedFiles.
-  // The AD Guardian payload nests at most ~3 levels deep (runtimes\win-x64\native),
-  // so 16 is a generous safety bound. Bounded levels prevents a malicious or
-  // accidentally-created NTFS junction / symlink (e.g. {app}\foo -> C:\) from
-  // causing the installer to cascade through the entire system root.
-  MaxScanLevels = 16;
-  // NTFS reparse-point attribute. Entries with this attribute are junction
-  // points, symlinks, or OneDrive placeholder folders — we DO NOT recurse
-  // INTO them (to avoid depth-cap bypass) AND we DO NOT touch symlinked files
-  // (to avoid the rename-on-failure path following the link to caller-controlled
-  // destinations outside {app}). This keeps the scan strictly scoped to actual
-  // install payload files.
-  FILE_ATTRIBUTE_REPARSE_POINT = $00000400;
-
-function IsProbablyLockedDllOrExe(const FileName: string): Boolean;
-var
-  Lower: string;
-begin
-  // Wildcard match on the *suffix* (.dll / .exe) is enough — Inno's [Files]
-  // section above copies every file in the payload regardless of extension,
-  // but only executables and DLLs are memory-mapped by the running .NET
-  // runtime or held by AV scanners / Smart App Control. Config files,
-  // licences, JSON, and INI files are not memory-mapped and DeleteFile on
-  // them almost always succeeds, so we leave them alone to keep the
-  // expensive rename-and-queue path narrowly targeted.
-  Lower := LowerCase(FileName);
-  Result := (Pos('.dll', Lower) > 0) or (Pos('.exe', Lower) > 0);
-end;
-
-function MoveFileExW(lpExistingFileName, lpNewFileName: String; dwFlags: DWORD): BOOL;
-  external 'MoveFileExW@kernel32.dll stdcall';
-
-function QueueLockedFileForRebootRemoval(const LockedFile: string): Boolean;
-var
-  TempRenamedFile: String;
-  CleanupDir: String;
-  CleanupDestFile: String;
-  RenameOk: Boolean;
-begin
-  // Windows blocks DELETING memory-mapped executables/DLLs (ERROR_ACCESS_DENIED,
-  // code 5) but explicitly allows RENAMING them. We exploit that:
-  //   1) Pre-create a sentinel cleanup subdir under {app}.
-  //   2) Rename the locked file out of the way (.deleteme suffix). This succeeds
-  //      even while the file is memory-mapped, because Windows treats rename
-  //      differently from delete on open files.
-  //   3) Queue MoveFileExW(.deleteme, cleanup-subdir\.deleteme, MOVEFILE_DELAY_UNTIL_REBOOT)
-  //      so the old file is moved out of {app}\ on next reboot. We deliberately
-  //      use a NON-empty destination. The Win32 docs specify that NULL target
-  //      schedules a deferred delete, but Inno Pascal's marshalling of String
-  //      to a stdcall parameter passes an empty string as a PWideChar to L"",
-  //      NOT as a NULL PWideChar pointer — relying on that path risks the API
-  //      silently failing or behaving undefined. A non-empty cleanup path is
-  //      safe regardless of marshalling semantics.
-  //   4) Inno's [Files] copy then sees a renamed-away file path and copies the
-  //      new file cleanly, with no user-facing "DeleteFile failed; code 5" dialog.
-  Result := False;
-  CleanupDir := ExpandConstant('{app}\') + CleanupPendingRebootDir;
-  ForceDirectories(CleanupDir);
-  TempRenamedFile := LockedFile + '.deleteme';
-  DeleteFile(TempRenamedFile);
-  RenameOk := RenameFile(LockedFile, TempRenamedFile);
-  if not RenameOk then
-  begin
-    Log('PreHandleLockedFiles: WARNING ' + LockedFile + ' is in use (memory-mapped, AV-locked, or ACL-protected) and could not be renamed out of the way. The copy step that follows WILL fail for this file unless the user closes AD Guardian.');
-    if not WizardSilent then
-      MsgBox('AD Guardian setup could not replace ' + LockedFile + ' because another process has it open.' + #13#10 + #13#10 +
-             'Please close all AD Guardian windows (including any background instances) and click Retry to continue setup.', mbInformation, MB_OK);
-    Exit;
-  end;
-  CleanupDestFile := AddBackslash(CleanupDir) + ExtractFileName(TempRenamedFile);
-  DeleteFile(CleanupDestFile);
-  // Once we've renamed the locked file away, the running AD Guardian.exe
-  // process is still holding the OLD memory-mapped bytes in its address space.
-  // New process launches will read the freshly copied new file from disk, but
-  // the current process will continue using the stale mmapped bytes indefinitely.
-  // Signal NeedRestart so Inno prompts for a reboot at the end of install — this
-  // is independent of whether MoveFileExW below succeeds at scheduling cleanup
-  // of the .deleteme file, since those are orthogonal concerns.
-  LockedFilesNeedReboot := True;
-  if MoveFileExW(TempRenamedFile, CleanupDestFile, MOVEFILE_DELAY_UNTIL_REBOOT) then
-    Log('PreHandleLockedFiles: Renamed ' + LockedFile + ' to ' + TempRenamedFile + ' and queued clean-up at next reboot (target ' + CleanupDestFile + ').')
-  else
-    Log('PreHandleLockedFiles: WARNING MoveFileExW could not queue ' + TempRenamedFile + ' for clean-up at next reboot. The .deleteme file will remain in the install directory until manually removed, but AD Guardian has already been updated at ' + LockedFile + '.');
-  Result := True;
-end;
-
-procedure ScanDirectoryForLockedFiles(const DirPath: string; const Depth: Integer);
-var
-  FindRec: TFindRec;
-  FullPath: string;
-begin
-  // Recursive walk of every file in the install directory: for *.dll/*.exe
-  // we attempt DeleteFile; on failure we rename-out-of-the-way and queue a
-  // deferred MoveFileEx for next reboot. This generalises the legacy
-  // clrjit.dll-only handler — older Windows builds, AV/scanners, and
-  // Smart App Control can lock any .dll/*.exe in {app}, not just the
-  // .NET runtime's JIT. The user can grep "PreHandleLockedFiles" in the
-  // %TEMP% setup log to see the entire scan trace.
-  //
-  // Safety: a hard depth cap (MaxScanDepth) PLUS skipping NTFS reparse
-  // points (junction points, symlinks, OneDrive placeholders) prevents a
-  // rogue or accidental junction under {app} from causing the installer to
-  // cascade through arbitrary filesystem locations (e.g. C:\) and queue
-  // random *.dll/*.exe for reboot-rename. Jumps in depth (Foo -> Foo\Bar
-  // -> Foo\Bar\Baz) are bounded; runaway symlink loops are intercepted.
-  if Depth >= MaxScanLevels then
-  begin
-    Log('PreHandleLockedFiles: Scan cap (' + IntToStr(MaxScanLevels) + ' levels) reached at ' + DirPath + '; not descending further.');
-    Exit;
-  end;
-  if not DirExists(DirPath) then Exit;
-  if not FindFirst(DirPath + '\*', FindRec) then Exit;
-  try
-    repeat
-      if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
-      begin
-        if (FindRec.Name <> '.') and (FindRec.Name <> '..') and
-           (LowerCase(FindRec.Name) <> SkipDirsForLockScan) and
-           ((FindRec.Attributes and FILE_ATTRIBUTE_REPARSE_POINT) = 0) then
-          ScanDirectoryForLockedFiles(DirPath + '\' + FindRec.Name, Depth + 1);
-      end
-      else if IsProbablyLockedDllOrExe(FindRec.Name) and
-              ((FindRec.Attributes and FILE_ATTRIBUTE_REPARSE_POINT) = 0) then
-      begin
-        FullPath := DirPath + '\' + FindRec.Name;
-        if not FileExists(FullPath) then
-          Continue;
-        if DeleteFile(FullPath) then
-        begin
-          Log('PreHandleLockedFiles: Removed out-of-date ' + FullPath + '.')
-        end
-        else
-        begin
-          Log('PreHandleLockedFiles: Could not DeleteFile ' + FullPath + ' (probably memory-mapped or held by AV). Renaming out of the way.');
-          QueueLockedFileForRebootRemoval(FullPath);
-        end;
-      end;
-    until not FindNext(FindRec);
-  finally
-    FindClose(FindRec);
-  end;
-end;
-
-procedure PreHandleLockedFiles();
-var
-  AppDir: string;
-begin
-  AppDir := ExpandConstant('{app}');
-  Log('PreHandleLockedFiles: Scanning ' + AppDir + ' for *.dll/*.exe that cannot be deleted (memory-mapped .NET runtime, AV lock, Smart App Control, or ACL-protected). This handles more files than just clrjit.dll.');
-  ScanDirectoryForLockedFiles(AppDir, 0);
-  Log('PreHandleLockedFiles: Scan complete.');
-end;
+// --- Portable locked-file handler -----------------------------------------
+// The universal *.dll / *.exe rename-and-queue handler (PreHandleLockedFiles)
+// lives in installer/_lib/UniversalLockHandler.iss so the same logic can be
+// re-used by future sibling installers without copy-paste divergence. This
+// file is #include'd below -- the snippet's Pascal Script body is
+// concatenated into this [Code] block and provides the public symbol:
+//
+//     procedure PreHandleLockedFiles();
+//
+// CALLER INVOKES PreHandleLockedFiles() FROM THEIR OWN CurStepChanged(ssInstall)
+// -- Inno Setup rejects an installer script that defines an event procedure
+// twice, so the snippet deliberately does NOT define CurStepChanged itself.
+//
+// SEE installer/_lib/README.md for what the caller must add to [Setup],
+// [Files], and any per-product message text overrides.
+#include "_lib\UniversalLockHandler.iss"
 
 function GetRoamingAppDataStatePath(): string;
 var
@@ -345,11 +200,13 @@ begin
   UpdateMode := Pos('/UPDATE', UpperCase(GetCmdTail)) > 0;
   ClosingForExternalUninstall := False;
   ExistingInstallDetected := TryReadExistingInstall(ExistingInstallPath, ExistingInstallUninstallString);
-  // Surface in the setup log so admins managing existing installs immediately
-  // understand why their pre-v2.0.26 C:\ADCheckLogs data is still on disk
-  // after upgrading. The installer does not migrate old logs — preserving
-  // forensic evidence wins over reclaiming disk space.
-  Log('Note: pre-v2.0.26 logs in C:\ADCheckLogs are intentionally preserved on disk (not migrated, not deleted). New writes go to ' + ExpandConstant('{commonappdata}') + '\AdHealthMonitor\Logs.');
+  // Surface in the setup log so admins managing existing installs see what
+  // happens to legacy data. The constant 'C:\ADCheckLogs' below is the
+  // hardcoded pre-v2.0.26 path the app used to write to before log writes
+  // moved to CommonApplicationData. The post-install step now removes
+  // that dir tree automatically -- admins no longer need to clean it up
+  // manually. New writes go to the ProgramData path.
+  Log('Note: pre-v2.0.26 logs in C:\ADCheckLogs will be removed by the post-install step. New writes go to ' + ExpandConstant('{commonappdata}') + '\AdHealthMonitor\Logs.');
   Result := True;
 end;
 
@@ -450,6 +307,188 @@ begin
   end;
 end;
 
+// Silent cleanup of the pre-v2.0.26 legacy log dir. The app used to write to
+// C:\ADCheckLogs but moved to {commonappdata}\AdHealthMonitor\Logs in v2.0.26
+// to dodge Defender Controlled Folder Access / Smart App Control locks on
+// arbitrary user-created system-root paths. Earlier installers preserved
+// the legacy dir for forensic reasons; from this build onward we proactively
+// remove it during CurStepChanged(ssPostInstall) so admins do not have to
+// clean it up manually. Silent on the wizard surface -- the user sees no
+// dialog -- but logged in %TEMP%\Setup Log YYYY-MM-DD #NNN.txt so admins can
+// audit what happened.
+//
+// Inno's FindFirst/FindNext does not expose a recursive walker, so the byte
+// count we surface is intentionally a TOP-LEVEL COUNT rather than a recursive
+// size. The legacy dir in practice contains a handful of empty dated
+// subdirs left over from the daily run cleanup, so top-level count is the
+// meaningful signal for "did the cleanup find anything".
+//
+// LIMITATION: Inno's DelTree silently follows NTFS junctions / symlinks. If
+// C:\ADCheckLogs was redirected (junction OR symlink) to a directory
+// outside C:\, this cleanup will delete the target's contents too. The
+// probability is low -- the legacy v2.0.25-and-earlier app only ever
+// created files under C:\ADCheckLogs, never junctions -- but admins who
+// intentionally redirected the dir are responsible for sanity-checking
+// before upgrading. Pascal Script does not expose FILE_ATTRIBUTE_REPARSE_POINT
+// natively so an in-script reparse probe would require Win32 externals; we
+// accept that residual risk here because the historical app behaviour gives
+// us no evidence the path ever contained a junction.
+//
+// If the path is locked (Defender scanning, open handles, ACL-protected),
+// DelTree returns False and we log a warning -- we deliberately do NOT throw
+// or pop a dialog because installing the new app must succeed independently
+// of this optional cleanup.
+function CleanupLegacyAdCheckLogs(): Boolean;
+var
+  LegacyDir: string;
+  Rec: TFindRec;
+  TopLevelCount: Integer;
+begin
+  Result := True;
+  LegacyDir := 'C:\ADCheckLogs';
+
+  if not DirExists(LegacyDir) then
+  begin
+    Log('Cleanup: legacy C:\ADCheckLogs is not present on this machine; nothing to remove.');
+    Exit;
+  end;
+
+  TopLevelCount := 0;
+  if FindFirst(LegacyDir + '\*', Rec) then
+  try
+    repeat
+      Inc(TopLevelCount);
+    until not FindNext(Rec);
+  finally
+    FindClose(Rec);
+  end;
+
+  try
+    if DelTree(LegacyDir, True, True, True) then
+    begin
+      Log(Format('Cleanup: removed legacy %s (%d top-level entries). New AD Guardian logs go to %s\AdHealthMonitor\Logs.', [LegacyDir, TopLevelCount, ExpandConstant('{commonappdata}')]));
+      // Tell the app about the migration so it can show the "Migration Complete"
+      // toast on first launch. Marker write is best-effort -- a failed write
+      // here only suppresses the toast, never the install.
+      if not WriteMigrationMarker('removed', TopLevelCount, '') then
+        Log('Cleanup: WARNING could not write MigrationMarker.json (write-failure is non-fatal; app will not show migration toast).');
+    end
+    else
+    begin
+      Result := False;
+      Log(Format('Cleanup: WARNING could not remove legacy %s. Some files may be locked by Defender Controlled Folder Access, Smart App Control, or third-party antivirus. The directory is still present after install. Admins can clear it manually via `rmdir /S /Q C:\ADCheckLogs` from an elevated cmd, or by rebooting and re-running setup.', [LegacyDir]));
+      // Migration incomplete -- write a 'failed' marker so the app shows a
+      // warning toast with the same root-cause detail. Best-effort write.
+      if not WriteMigrationMarker('failed', 0, Format('DelTree returned False: some files in %s were locked at install time', [LegacyDir])) then
+        Log('Cleanup: WARNING could not write MigrationMarker.json (write-failure is non-fatal; migration toast skipped).');
+    end;
+  except
+    Result := False;
+    Log(Format('Cleanup: REMOVAL of %s raised: %s', [LegacyDir, GetExceptionMessage]));
+    // Exception branch also gets a 'failed' marker so the user sees the
+    // diagnostic detail in the toast.
+    if not WriteMigrationMarker('failed', 0, Format('Pascal exception: %s', [GetExceptionMessage])) then
+      Log('Cleanup: WARNING could not write MigrationMarker.json (write-failure is non-fatal; migration toast skipped).');
+  end;
+end;
+
+// Writes a v1 MigrationMarker.json to %ProgramData%\AdHealthMonitor\. Hand-rolled
+// JSON (Pascal Script does not expose System.Text.Json / JSON.NET). Calls
+// MigrationMarker.TryReadAndDelete in App.OnStartup, so schema must stay in
+// lockstep. Update both sides together if the schema is ever bumped.
+//
+// The marker is written UNCONDITIONALLY on each post-install cleanup attempt
+// EXCEPT for the absent-path branch -- on a brand-new machine (no legacy data
+// ever existed), we deliberately do NOT write a marker because the installer's
+// already-empty audit log is sufficient auditable evidence. The app would
+// otherwise show a confusing "Migration Complete" toast to a user who never
+// had legacy data.
+function GetMigrationMarkerPath(): string;
+begin
+  Result := ExpandConstant('{commonappdata}') + '\AdHealthMonitor\MigrationMarker.json';
+end;
+
+function WriteMigrationMarker(const Status: string; Entries: Integer; const Reason: string): Boolean;
+var
+  MarkerPath: string;
+  MarkerJson: TStringList;
+  ReasonEscaped: string;
+  EntriesStr: string;
+  TimeStr: string;
+  I: Integer;
+  C: Char;
+  Code: Integer;
+  HexStr: string;
+begin
+  Result := False;
+  MarkerPath := GetMigrationMarkerPath();
+
+  // RFC 8259 JSON-escape the Reason string by hand -- Pascal Script has no
+  // JSON library and the installer's audit log can contain quotes, backslashes,
+  // and newlines. The on-disk file is read by Newtonsoft.Json which is strict
+  // about escape correctness.
+  ReasonEscaped := '';
+  for I := 1 to Length(Reason) do
+  begin
+    C := Reason[I];
+    // RFC 8259 string escapes, named chars first then \u00XX for remaining 0..31 control chars.
+    case C of
+      '"':  ReasonEscaped := ReasonEscaped + '\"';
+      '\':  ReasonEscaped := ReasonEscaped + '\\';
+      #8:   ReasonEscaped := ReasonEscaped + '\b';   { \b  -- backspace (unlikely in installer logs but per RFC) }
+      #9:   ReasonEscaped := ReasonEscaped + '\t';
+      #10:  ReasonEscaped := ReasonEscaped + '\n';
+      #12:  ReasonEscaped := ReasonEscaped + '\f';   { \f  -- form feed   (unlikely in installer logs but per RFC) }
+      #13:  ReasonEscaped := ReasonEscaped + '\r';
+    else
+      begin
+        Code := Ord(C);
+        if (Code >= 0) and (Code < 32) then
+        begin
+          HexStr := IntToHex(Code, 2);
+          if Length(HexStr) = 1 then
+            HexStr := '0' + HexStr;
+          ReasonEscaped := ReasonEscaped + '\u00' + HexStr;
+        end
+        else
+          ReasonEscaped := ReasonEscaped + C;
+      end;
+    end;
+  end;
+
+  EntriesStr := IntToStr(Entries);
+
+  // Local-time ISO-8601 (no UTC claim -- Pascal Script's FormatDateTime does
+  // not expose UtcNow natively, and an installation timestamp rounded to
+  // local time is fine for "when did I install this?" UX). The C# reader
+  // treats this as an opaque string.
+  TimeStr := FormatDateTime('yyyy-mm-dd', Now) + 'T' + FormatDateTime('hh:nn:ss', Now);
+
+  MarkerJson := TStringList.Create;
+  try
+    MarkerJson.Add('{');
+    // schemaVersion: 1 is HARDCODED here on purpose -- it MUST match
+    // MigrationMarker.CurrentSchemaVersion in C# (MigrationMarker.cs). If you
+    // bump the C# version, update this literal in lockstep or future markers
+    // will be silently left on disk by the parser's `> CurrentSchemaVersion`
+    // guard -- acceptable fallout, but documented so the invariant is obvious.
+    MarkerJson.Add('  "schemaVersion": 1,');
+    MarkerJson.Add('  "cleanupStatus": "' + Status + '",');
+    MarkerJson.Add('  "entriesRemoved": ' + EntriesStr + ',');
+    MarkerJson.Add('  "installTime": "' + TimeStr + '",');
+    if Reason <> '' then
+      MarkerJson.Add('  "reason": "' + ReasonEscaped + '"');
+    MarkerJson.Add('}');
+    // TEncoding.UTF8 writes a BOM; Newtonsoft.Json handles UTF-8 with or
+    // without BOM, so this round-trips cleanly on the C# side.
+    MarkerJson.SaveToFile(MarkerPath, TEncoding.UTF8);
+    Result := True;
+  except
+    Result := False;
+  end;
+  MarkerJson.Free;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
@@ -471,6 +510,13 @@ begin
   else if CurStep = ssPostInstall then
   begin
     SetInstallStatus('Finalising shortcuts, uninstall registration, and launch options...');
+    // Silent (no UI) cleanup of pre-v2.0.26 legacy C:\ADCheckLogs tree now
+    // that the new CommonApplicationData-backed log path is in place. See
+    // CleanupLegacyAdCheckLogs above for the implementation + invariants
+    // (deliberately best-effort: install completion does NOT depend on
+    // removal succeeding -- so a Defender-locked legacy tree does not block
+    // the install).
+    CleanupLegacyAdCheckLogs();
   end;
 end;
 
