@@ -72,6 +72,14 @@ Name: "{commonappdata}\AdHealthMonitor\Logs\runs"
 ; Do NOT remove either flag.
 Source: "{#SourcePayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace
 
+; Bundle the reusable cleanup-adchecklogs.ps1 helper next to the EXE so the
+; failure-path log message points to a tool the user actually has on disk
+; after install (rather than needing to clone the repo). The PS helper lives
+; at the repo's scripts/ dir; Inno resolves relative Source paths against
+; the .iss file directory (installer/), so ..\scripts\ reaches the project
+; root's scripts/ directory.
+Source: "..\scripts\cleanup-adchecklogs.ps1"; DestDir: "{app}"; Flags: ignoreversion
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
@@ -131,7 +139,7 @@ begin
   if ExistingInstallDetected and (ExistingInstallPath <> '') then
     Result := ExistingInstallPath
   else
-    Result := ExpandConstant('{autopf}\AD Guardian');
+    Result := ExpandConstant('{commonappdata}\AD Guardian');
 end;
 
 procedure SplitCommandLine(const CommandLine: string; var FileName, Params: string);
@@ -366,6 +374,15 @@ begin
     until not FindNext(Rec);
   finally
     FindClose(Rec);
+  end
+  else
+  begin
+    // DirExists was True above, but FindFirst returned False. This almost
+    // certainly means Defender Controlled Folder Access, anti-ransomware,
+    // or an ACL is blocking enumeration of C:\ADCheckLogs. Surface a clear
+    // diagnostic so the user sees WHY the cleanup didn't work, rather than
+    // a generic 'path not found' silence.
+    Log(Format('Cleanup: WARNING C:\ADCheckLogs exists but cannot be enumerated. This is almost always caused by Defender Controlled Folder Access, anti-ransomware protection, or third-party antivirus blocking reads on a legacy path. The directory is still present and may need manual cleanup via %s\cleanup-adchecklogs.ps1 -Force -Json.', [ExpandConstant('{app}')]));
   end;
 
   // ── Phase 1: Copy legacy log files into a timestamped subfolder of the
@@ -429,7 +446,7 @@ begin
   else
   begin
     Result := False;
-    Log(Format('Cleanup: WARNING could not remove legacy %s. Some files may be locked by Defender Controlled Folder Access, Smart App Control, or third-party antivirus. The directory is still present after install. Admins can clear it manually via scripts\cleanup-adchecklogs.ps1 -Force -Json for a recursive walk with file/byte counts + symlink detection, or `rmdir /S /Q C:\ADCheckLogs` from an elevated cmd if PowerShell is unavailable, or by rebooting and re-running setup. Migration copy completed (%d files -> %s) before the deletion failed, so data is preserved.', [LegacyDir, EntriesMigrated, MigratedRoot]));
+    Log(Format('Cleanup: WARNING could not remove legacy %s. Some files may be locked by Defender Controlled Folder Access, Smart App Control, or third-party antivirus. The directory is still present after install. Admins can clear it manually via %s\cleanup-adchecklogs.ps1 -Force -Json for a recursive walk with file/byte counts + symlink detection, or `rmdir /S /Q C:\ADCheckLogs` from an elevated cmd if PowerShell is unavailable, or by rebooting and re-running setup. Migration copy completed (%d files -> %s) before the deletion failed, so data is preserved.', [LegacyDir, ExpandConstant('{app}'), EntriesMigrated, MigratedRoot]));
     if not WriteMigrationMarker('failed', TopLevelCount, Format('DelTree returned False: some files in %s were locked at install time', [LegacyDir]),
       EntriesMigrated, Collisions, CopyErrors, MigratedRoot, BytesMigrated) then
       Log('Cleanup: WARNING could not write MigrationMarker.json (write-failure is non-fatal; migration toast skipped).');
@@ -596,6 +613,17 @@ begin
         until not FindNext(Rec);
       finally
         FindClose(Rec);
+      end
+      else
+      begin
+        // DirExists was true above (stack push checked it), but FindFirst
+        // returned False. The most common cause on modern Windows builds is
+        // Defender Controlled Folder Access or anti-ransomware blocking
+        // enumeration of a previously-unprotected legacy path. Log a
+        // specific diagnostic and skip the directory rather than silently
+        // treating it as empty -- an empty directory would have returned
+        // True with zero entries, not False.
+        Log(Format('Migration: WARNING could not enumerate %s -- likely Defender CFA or antivirus is blocking enumeration. Skipping directory.', [CurrentDir]));
       end;
     end;
   finally
